@@ -1,0 +1,44 @@
+type FacePair = (Face, Facelet);
+
+
+const CUBELET_PAIRS: [FacePair; 24] = [
+	([ (Face::Up, Facelet::Green), (Face::Front, Facelet::Red), (Face::Left, Facelet::Yellow), (Face::Back, Facelet::Orange), (Face::Right, Facelet::White), (Face::Down, Facelet::Blue) ], X3Z3),
+	([ (Face::Up, Facelet::Green), (Face::Front, Facelet::Orange), (Face::Left, Facelet::White), (Face::Back, Facelet::Red), (Face::Right, Facelet::Yellow), (Face::Down, Facelet::Blue) ], X3Z),
+	([ (Face::Up, Facelet::Red), (Face::Front, Facelet::Yellow), (Face::Left, Facelet::Green), (Face::Back, Facelet::White), (Face::Right, Facelet::Blue), (Face::Down, Facelet::Orange) ], X3Y3),
+	([ (Face::Up, Facelet::Orange), (Face::Front, Facelet::Yellow), (Face::Left, Facelet::Blue), (Face::Back, Facelet::White), (Face::Right, Facelet::Green), (Face::Down, Facelet::Red) ], X3Y),
+	([ (Face::Up, Facelet::Yellow), (Face::Front, Facelet::Red), (Face::Left, Facelet::Blue), (Face::Back, Facelet::Orange), (Face::Right, Facelet::Green), (Face::Down, Facelet::White) ], X2Z3),
+	([ (Face::Up, Facelet::Yellow), (Face::Front, Facelet::Orange), (Face::Left, Facelet::Green), (Face::Back, Facelet::Red), (Face::Right, Facelet::Blue), (Face::Down, Facelet::White) ], X2Z),
+	([ (Face::Up, Facelet::Red), (Face::Front, Facelet::Blue), (Face::Left, Facelet::Yellow), (Face::Back, Facelet::Green), (Face::Right, Facelet::White), (Face::Down, Facelet::Orange) ], X2Y3),
+	([ (Face::Up, Facelet::Orange), (Face::Front, Facelet::Blue), (Face::Left, Facelet::White), (Face::Back, Facelet::Green), (Face::Right, Facelet::Yellow), (Face::Down, Facelet::Red) ], X2Y),
+	([ (Face::Up, Facelet::Blue), (Face::Front, Facelet::Red), (Face::Left, Facelet::White), (Face::Back, Facelet::Orange), (Face::Right, Facelet::Yellow), (Face::Down, Facelet::Green) ], XZ3),
+	([ (Face::Up, Facelet::Blue), (Face::Front, Facelet::Yellow), (Face::Left, Facelet::Red), (Face::Back, Facelet::White), (Face::Right, Facelet::Orange), (Face::Down, Facelet::Green) ], XZ2),
+	([ (Face::Up, Facelet::Blue), (Face::Front, Facelet::Orange), (Face::Left, Facelet::Yellow), (Face::Back, Facelet::Red), (Face::Right, Facelet::White), (Face::Down, Facelet::Green) ], XZ),
+	([ (Face::Up, Facelet::Red), (Face::Front, Facelet::White), (Face::Left, Facelet::Blue), (Face::Back, Facelet::Yellow), (Face::Right, Facelet::Green), (Face::Down, Facelet::Orange) ], XY3),
+	([ (Face::Up, Facelet::Green), (Face::Front, Facelet::White), (Face::Left, Facelet::Red), (Face::Back, Facelet::Yellow), (Face::Right, Facelet::Orange), (Face::Down, Facelet::Blue) ], XY2),
+	([ (Face::Up, Facelet::Orange), (Face::Front, Facelet::White), (Face::Left, Facelet::Green), (Face::Back, Facelet::Yellow), (Face::Right, Facelet::Blue), (Face::Down, Facelet::Red) ], XY),
+	([ (Face::Up, Facelet::White), (Face::Front, Facelet::Red), (Face::Left, Facelet::Green), (Face::Back, Facelet::Orange), (Face::Right, Facelet::Blue), (Face::Down, Facelet::Yellow) ], Z3),
+	([ (Face::Up, Facelet::White), (Face::Front, Facelet::Red), (Face::Left, Facelet::Green), (Face::Back, Facelet::Orange), (Face::Right, Facelet::Blue), (Face::Down, Facelet::Yellow) ], Z2),
+	([ (Face::Up, Facelet::White), (Face::Front, Facelet::Orange), (Face::Left, Facelet::Blue), (Face::Back, Facelet::Red), (Face::Right, Facelet::Green), (Face::Down, Facelet::Yellow) ], Z),
+	([ (Face::Up, Facelet::Red), (Face::Front, Facelet::Green), (Face::Left, Facelet::White), (Face::Back, Facelet::Blue), (Face::Right, Facelet::Yellow), (Face::Down, Facelet::Orange) ], Y3),
+	([ (Face::Up, Facelet::Yellow), (Face::Front, Facelet::Green), (Face::Left, Facelet::Red), (Face::Back, Facelet::Blue), (Face::Right, Facelet::Orange), (Face::Down, Facelet::White) ], Y2),
+	([ (Face::Up, Facelet::Orange), (Face::Front, Facelet::Green), (Face::Left, Facelet::Yellow), (Face::Back, Facelet::Blue), (Face::Right, Facelet::White), (Face::Down, Facelet::Red) ], Y),
+	([ (Face::Up, Facelet::Green), (Face::Front, Facelet::Yellow), (Face::Left, Facelet::Orange), (Face::Back, Facelet::White), (Face::Right, Facelet::Red), (Face::Down, Facelet::Blue) ], X3),
+	([ (Face::Up, Facelet::Yellow), (Face::Front, Facelet::Blue), (Face::Left, Facelet::Orange), (Face::Back, Facelet::Green), (Face::Right, Facelet::Red), (Face::Down, Facelet::White) ], X2),
+	([ (Face::Up, Facelet::Blue), (Face::Front, Facelet::White), (Face::Left, Facelet::Orange), (Face::Back, Facelet::Yellow), (Face::Right, Facelet::Red), (Face::Down, Facelet::Green) ], X),
+	([ (Face::Up, Facelet::White), (Face::Front, Facelet::Green), (Face::Left, Facelet::Orange), (Face::Back, Facelet::Blue), (Face::Right, Facelet::Red), (Face::Down, Facelet::Yellow) ], Neutral),
+];
+
+fn from_two_facelets(pair1: FacePair, pair2: FacePair) -> Option<Self> {
+	for (face_pairs, rotation) in CUBELET_PAIRS {
+		if face_pairs.contains(pair1) and face_pairs.contains(pair2) {
+			return Some(rotation)
+		}
+	}
+	None
+}
+
+
+Neutral: Cubelet { up: White, front: Green, left: Orange, back: Blue, right: Red, down: Yellow }
+
+
+
