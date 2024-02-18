@@ -18,17 +18,63 @@ use crate::cube::{Axis, Rotation};
 
 /// Number of turns on the most negative face, number of turns on the most positive face,
 /// and the axis on which the turns happen
-/// #[derive(Debug)]
+#[derive(Clone, Copy, Debug)]
 pub struct Move(pub u8, pub u8, pub Axis);
+
+impl Move {
+    pub const ALL: [Move; 48] = {
+        let mut i = 0;
+        let mut res = [Move(0, 0, Axis::X); 48];
+        while i < 4 {
+            let mut j = 0;
+            while j < 4 {
+                res[i*12 + j*3] = Move(i as u8, j as u8, Axis::X);
+                res[i*12 + j*3 + 1] = Move(i as u8, j as u8, Axis::Y);
+                res[i*12 + j*3 + 2] = Move(i as u8, j as u8, Axis::Z);
+                j += 1;
+            }
+            i += 1;
+        }
+        res
+    };
+}
 
 /// A Rubiks' cube arrangement, represented by the rotation of
 /// the cubelets relative to the solved arrangement. Each cubelet
 /// is represented in the place where it is currently. Face centers
 /// and the middle-middle-middle piece are never changed from Rotation::Neutral
 /// This is probably the most practical memory layout.
-#[derive(Debug, Default)]
+#[derive(Debug, Default, PartialEq, Eq, Hash)]
 pub struct CubeletsArrangement {
-    cubelets: [[[Rotation; 3]; 3] ;3]
+    pub cubelets: [[[Rotation; 3]; 3] ;3]
+}
+
+pub struct CubeletsIter<'a> {
+    cube: &'a CubeletsArrangement,
+    x: usize,
+    y: usize,
+    z: usize,
+}
+
+impl Iterator for CubeletsIter<'_> {
+    type Item = Rotation;
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.x > 2 {
+            None
+        } else {
+            let item = Some(self.cube.cubelets[self.x][self.y][self.z]);
+            self.z += 1;
+            if self.z > 2 {
+                self.z = 0;
+                self.y += 1;
+                if self.y > 2 {
+                    self.y = 0;
+                    self.x += 1;
+                }
+            }
+            item
+        }
+    }
 }
 
 impl Display for CubeletsArrangement {
@@ -213,6 +259,10 @@ impl CubeletsArrangement {
 
         self.turn_face::<true>(rot1);
         self.turn_face::<false>(rot2);
+    }
+
+    pub fn iter(&self) -> CubeletsIter {
+        CubeletsIter { cube: self, x: 0, y: 0, z: 0 }
     }
 }
 

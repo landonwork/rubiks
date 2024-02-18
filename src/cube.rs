@@ -14,7 +14,7 @@ pub enum Axis {
 
 /// The 24 possible rotations for a cube in their reduced form
 #[repr(u8)]
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum Rotation {
     // neutral
     Neutral,
