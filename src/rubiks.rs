@@ -1,4 +1,4 @@
-use std::fmt::Display;
+use std::{fmt::Display, array};
 
 use crate::cube::{Axis, Rotation};
 
@@ -22,15 +22,65 @@ use crate::cube::{Axis, Rotation};
 pub struct Move(pub u8, pub u8, pub Axis);
 
 impl Move {
-    pub const ALL: [Move; 48] = {
+    pub const ALL: [Move; 45] = {
         let mut i = 0;
-        let mut res = [Move(0, 0, Axis::X); 48];
+        let mut res = [Move(0, 0, Axis::X); 45];
         while i < 4 {
             let mut j = 0;
             while j < 4 {
-                res[i*12 + j*3] = Move(i as u8, j as u8, Axis::X);
-                res[i*12 + j*3 + 1] = Move(i as u8, j as u8, Axis::Y);
-                res[i*12 + j*3 + 2] = Move(i as u8, j as u8, Axis::Z);
+                if !(i == 0 && j == 0) {
+                    res[i*12 + j*3 - 3] = Move(i as u8, j as u8, Axis::X);
+                    res[i*12 + j*3 - 2] = Move(i as u8, j as u8, Axis::Y);
+                    res[i*12 + j*3 - 1] = Move(i as u8, j as u8, Axis::Z);
+                }
+                j += 1;
+            }
+            i += 1;
+        }
+        res
+    };
+
+    pub const X: [Move; 15] = {
+        let mut i = 0;
+        let mut res = [Move(0, 0, Axis::X); 15];
+        while i < 4 {
+            let mut j = 0;
+            while j < 4 {
+                if !(i == 0 && j == 0) {
+                    res[i*4 + j - 1] = Move(i as u8, j as u8, Axis::X);
+                }
+                j += 1;
+            }
+            i += 1;
+        }
+        res
+    };
+
+    pub const Y: [Move; 15] = {
+        let mut i = 0;
+        let mut res = [Move(0, 0, Axis::Y); 15];
+        while i < 4 {
+            let mut j = 0;
+            while j < 4 {
+                if !(i == 0 && j == 0) {
+                    res[i*4 + j - 1] = Move(i as u8, j as u8, Axis::Y);
+                }
+                j += 1;
+            }
+            i += 1;
+        }
+        res
+    };
+
+    pub const Z: [Move; 15] = {
+        let mut i = 0;
+        let mut res = [Move(0, 0, Axis::Z); 15];
+        while i < 4 {
+            let mut j = 0;
+            while j < 4 {
+                if !(i == 0 && j == 0) {
+                    res[i*4 + j - 1] = Move(i as u8, j as u8, Axis::Z);
+                }
                 j += 1;
             }
             i += 1;
@@ -39,41 +89,37 @@ impl Move {
     };
 }
 
+pub const fn index<const X: usize, const Y: usize, const Z: usize>() -> usize {
+    assert!(X < 3);
+    assert!(Y < 3);
+    assert!(Z < 3);
+
+    Z + 3 * Y + 9 * X
+    - (X==0 && Z==2 && Y==1 || Y==2 || X>0) as usize
+    - (X==1 && (Z==2 || Y==2) || X==2) as usize
+    - (X==1 && Y==2 || X==2) as usize * 3
+    - (X==1 && Y==2 && Z==2 || X==2) as usize
+    - (X==2 && (Z==2 && Y==1 || Y==2 || X>0)) as usize
+}
+
 /// A Rubiks' cube arrangement, represented by the rotation of
 /// the cubelets relative to the solved arrangement. Each cubelet
 /// is represented in the place where it is currently. Face centers
 /// and the middle-middle-middle piece are never changed from Rotation::Neutral
 /// This is probably the most practical memory layout.
-#[derive(Debug, Default, PartialEq, Eq, Hash)]
+#[derive(Clone, Debug, Default, PartialEq, Eq, Hash)]
 pub struct CubeletsArrangement {
-    pub cubelets: [[[Rotation; 3]; 3] ;3]
+    pub cubelets: [Rotation; 20]
 }
 
-pub struct CubeletsIter<'a> {
-    cube: &'a CubeletsArrangement,
-    x: usize,
-    y: usize,
-    z: usize,
+pub struct CubeletsIter {
+    inner: array::IntoIter<Rotation, 20>
 }
 
-impl Iterator for CubeletsIter<'_> {
+impl Iterator for CubeletsIter {
     type Item = Rotation;
     fn next(&mut self) -> Option<Self::Item> {
-        if self.x > 2 {
-            None
-        } else {
-            let item = Some(self.cube.cubelets[self.x][self.y][self.z]);
-            self.z += 1;
-            if self.z > 2 {
-                self.z = 0;
-                self.y += 1;
-                if self.y > 2 {
-                    self.y = 0;
-                    self.x += 1;
-                }
-            }
-            item
-        }
+        self.inner.next()
     }
 }
 
@@ -83,186 +129,118 @@ impl Display for CubeletsArrangement {
         writeln!(
             f,
             "{:?}\t{:?}\t{:?}\t{:?}\t{:?}\t{:?}\t{:?}\t{:?}",
-            c[0][2][2], c[0][1][2], c[0][0][2], c[1][0][2], c[2][0][2], c[2][1][2], c[2][2][2], c[1][2][2],
+            c[index::<0,2,2>()], c[index::<0,1,2>()], c[index::<0,0,2>()], c[index::<1,0,2>()], c[index::<2,0,2>()], c[index::<2,1,2>()], c[index::<2,2,2>()], c[index::<1,2,2>()],
         )?;
         writeln!(
             f,
             "{:?}\t{:?}\t{:?}\t{:?}\t{:?}\t{:?}\t{:?}\t{:?}",
-            c[0][2][1], "O", c[0][0][1], "G", c[2][0][1], "R", c[2][2][1], "B",
+            c[index::<0,2,1>()], "O", c[index::<0,0,1>()], "G", c[index::<2,0,1>()], "R", c[index::<2,2,1>()], "B",
         )?;
         writeln!(
             f,
             "{:?}\t{:?}\t{:?}\t{:?}\t{:?}\t{:?}\t{:?}\t{:?}",
-            c[0][2][0], c[0][1][0], c[0][0][0], c[1][0][0], c[2][0][0], c[2][1][0], c[2][2][0], c[1][2][0],
+            c[index::<0,2,0>()], c[index::<0,1,0>()], c[index::<0,0,0>()], c[index::<1,0,0>()], c[index::<2,0,0>()], c[index::<2,1,0>()], c[index::<2,2,0>()], c[index::<1,2,0>()],
         )?;
         Ok(())
     }
 }
 
 impl CubeletsArrangement {
-    pub fn turn_face<const NEG: bool>(&mut self, rot: Rotation) {
-        let c = &mut self.cubelets;
-        let sign = if NEG { 0 } else { 2 };
+    fn turn_face<const FACE: usize>(self, rot: Rotation) -> Self {
+        let mut c = self.cubelets;
         match rot {
             Rotation::Neutral => {}
             Rotation::X => {
                 // corners
-                (c[sign][2][2], c[sign][0][2], c[sign][0][0], c[sign][2][0]) = (
-                    c[sign][2][0].compose(rot),
-                    c[sign][2][2].compose(rot),
-                    c[sign][0][2].compose(rot),
-                    c[sign][0][0].compose(rot)
-                );
+                (c[index::<FACE,2,2>()], c[index::<FACE,0,2>()], c[index::<FACE,0,0>()], c[index::<FACE,2,0>()]) =
+                    (c[index::<FACE,2,0>()].compose(rot), c[index::<FACE,2,2>()].compose(rot), c[index::<FACE,0,2>()].compose(rot), c[index::<FACE,0,0>()].compose(rot));
                 // edges
-                (c[sign][1][2], c[sign][0][1], c[sign][1][0], c[sign][2][1]) = (
-                    c[sign][2][1].compose(rot),
-                    c[sign][1][2].compose(rot),
-                    c[sign][0][1].compose(rot),
-                    c[sign][1][0].compose(rot)
-                );
+                (c[index::<FACE,1,2>()], c[index::<FACE,0,1>()], c[index::<FACE,1,0>()], c[index::<FACE,2,1>()]) =
+                    (c[index::<FACE,2,1>()].compose(rot), c[index::<FACE,1,2>()].compose(rot), c[index::<FACE,0,1>()].compose(rot), c[index::<FACE,1,0>()].compose(rot));
             }
             Rotation::X2 => {
                 // corners
-                (c[sign][2][2], c[sign][0][2], c[sign][0][0], c[sign][2][0]) = (
-                    c[sign][0][0].compose(rot),
-                    c[sign][2][0].compose(rot),
-                    c[sign][2][2].compose(rot),
-                    c[sign][0][2].compose(rot)
-                );
+                (c[index::<FACE,2,2>()], c[index::<FACE,0,2>()], c[index::<FACE,0,0>()], c[index::<FACE,2,0>()]) =
+                    (c[index::<FACE,0,0>()].compose(rot), c[index::<FACE,2,0>()].compose(rot), c[index::<FACE,2,2>()].compose(rot), c[index::<FACE,0,2>()].compose(rot));
                 // edges
-                (c[sign][1][2], c[sign][0][1], c[sign][1][0], c[sign][2][1]) = (
-                    c[sign][1][0].compose(rot),
-                    c[sign][2][1].compose(rot),
-                    c[sign][1][2].compose(rot),
-                    c[sign][0][1].compose(rot)
-                );
+                (c[index::<FACE,1,2>()], c[index::<FACE,0,1>()], c[index::<FACE,1,0>()], c[index::<FACE,2,1>()]) =
+                    (c[index::<FACE,1,0>()].compose(rot), c[index::<FACE,2,1>()].compose(rot), c[index::<FACE,1,2>()].compose(rot), c[index::<FACE,0,1>()].compose(rot));
             }
             Rotation::X3 => {
                 // corners
-                (c[sign][2][2], c[sign][0][2], c[sign][0][0], c[sign][2][0]) = (
-                    c[sign][0][2].compose(rot),
-                    c[sign][0][0].compose(rot),
-                    c[sign][2][0].compose(rot),
-                    c[sign][2][2].compose(rot)
-                );
+                (c[index::<FACE,2,2>()], c[index::<FACE,0,2>()], c[index::<FACE,0,0>()], c[index::<FACE,2,0>()]) =
+                    (c[index::<FACE,0,2>()].compose(rot), c[index::<FACE,0,0>()].compose(rot), c[index::<FACE,2,0>()].compose(rot), c[index::<FACE,2,2>()].compose(rot));
                 // edges
-                (c[sign][1][2], c[sign][0][1], c[sign][1][0], c[sign][2][1]) = (
-                    c[sign][0][1].compose(rot),
-                    c[sign][1][2].compose(rot),
-                    c[sign][2][1].compose(rot),
-                    c[sign][1][0].compose(rot)
-                );
+                (c[index::<FACE,1,2>()], c[index::<FACE,0,1>()], c[index::<FACE,1,0>()], c[index::<FACE,2,1>()]) =
+                    (c[index::<FACE,0,1>()].compose(rot), c[index::<FACE,1,2>()].compose(rot), c[index::<FACE,2,1>()].compose(rot), c[index::<FACE,1,0>()].compose(rot));
             }
             Rotation::Y => {
                 // corners
-                (c[2][sign][2], c[0][sign][2], c[0][sign][0], c[2][sign][0]) = (
-                    c[0][sign][2].compose(rot),
-                    c[0][sign][0].compose(rot),
-                    c[2][sign][0].compose(rot),
-                    c[2][sign][2].compose(rot)
-                );
+                (c[index::<2,FACE,2>()], c[index::<0,FACE,2>()], c[index::<0,FACE,0>()], c[index::<2,FACE,0>()]) =
+                    (c[index::<0,FACE,2>()].compose(rot), c[index::<0,FACE,0>()].compose(rot), c[index::<2,FACE,0>()].compose(rot), c[index::<2,FACE,2>()].compose(rot));
                 // edges
-                (c[1][sign][2], c[0][sign][1], c[1][sign][0], c[2][sign][1]) = (
-                    c[0][sign][1].compose(rot),
-                    c[1][sign][0].compose(rot),
-                    c[2][sign][1].compose(rot),
-                    c[1][sign][2].compose(rot)
-                );
+                (c[index::<1,FACE,2>()], c[index::<0,FACE,1>()], c[index::<1,FACE,0>()], c[index::<2,FACE,1>()]) =
+                    (c[index::<0,FACE,1>()].compose(rot), c[index::<1,FACE,0>()].compose(rot), c[index::<2,FACE,1>()].compose(rot), c[index::<1,FACE,2>()].compose(rot));
             }
             Rotation::Y2 => {
                 // corners
-                (c[2][sign][2], c[0][sign][2], c[0][sign][0], c[2][sign][0]) = (
-                    c[0][sign][0].compose(rot),
-                    c[2][sign][0].compose(rot),
-                    c[2][sign][2].compose(rot),
-                    c[0][sign][2].compose(rot)
-                );
+                (c[index::<2,FACE,2>()], c[index::<0,FACE,2>()], c[index::<0,FACE,0>()], c[index::<2,FACE,0>()]) =
+                    (c[index::<0,FACE,0>()].compose(rot), c[index::<2,FACE,0>()].compose(rot), c[index::<2,FACE,2>()].compose(rot), c[index::<0,FACE,2>()].compose(rot));
                 // edges
-                (c[1][sign][2], c[0][sign][1], c[1][sign][0], c[2][sign][1]) = (
-                    c[1][sign][0].compose(rot),
-                    c[2][sign][1].compose(rot),
-                    c[1][sign][2].compose(rot),
-                    c[0][sign][1].compose(rot)
-                );
+                (c[index::<1,FACE,2>()], c[index::<0,FACE,1>()], c[index::<1,FACE,0>()], c[index::<2,FACE,1>()]) =
+                    (c[index::<1,FACE,0>()].compose(rot), c[index::<2,FACE,1>()].compose(rot), c[index::<1,FACE,2>()].compose(rot), c[index::<0,FACE,1>()].compose(rot));
             }
             Rotation::Y3 => {
                 // corners
-                (c[2][sign][2], c[0][sign][2], c[0][sign][0], c[2][sign][0]) = (
-                    c[2][sign][0].compose(rot),
-                    c[2][sign][2].compose(rot),
-                    c[0][sign][2].compose(rot),
-                    c[0][sign][0].compose(rot)
-                );
+                (c[index::<2,FACE,2>()], c[index::<0,FACE,2>()], c[index::<0,FACE,0>()], c[index::<2,FACE,0>()]) =
+                    (c[index::<2,FACE,0>()].compose(rot), c[index::<2,FACE,2>()].compose(rot), c[index::<0,FACE,2>()].compose(rot), c[index::<0,FACE,0>()].compose(rot));
                 // edges
-                (c[1][sign][2], c[0][sign][1], c[1][sign][0], c[2][sign][1]) = (
-                    c[2][sign][1].compose(rot),
-                    c[1][sign][2].compose(rot),
-                    c[0][sign][1].compose(rot),
-                    c[1][sign][0].compose(rot)
-                );
+                (c[index::<1,FACE,2>()], c[index::<0,FACE,1>()], c[index::<1,FACE,0>()], c[index::<2,FACE,1>()]) =
+                    (c[index::<2,FACE,1>()].compose(rot), c[index::<1,FACE,2>()].compose(rot), c[index::<0,FACE,1>()].compose(rot), c[index::<1,FACE,0>()].compose(rot));
             }
             Rotation::Z => {
                 // corners
-                (c[2][2][sign], c[0][2][sign], c[0][0][sign], c[2][0][sign]) = (
-                    c[2][0][sign].compose(rot),
-                    c[2][2][sign].compose(rot),
-                    c[0][2][sign].compose(rot),
-                    c[0][0][sign].compose(rot)
-                );
+                (c[index::<2,2,FACE>()], c[index::<0,2,FACE>()], c[index::<0,0,FACE>()], c[index::<2,0,FACE>()]) =
+                    (c[index::<2,0,FACE>()].compose(rot), c[index::<2,2,FACE>()].compose(rot), c[index::<0,2,FACE>()].compose(rot), c[index::<0,0,FACE>()].compose(rot));
                 // edges
-                (c[1][2][sign], c[0][1][sign], c[1][0][sign], c[2][1][sign]) = (
-                    c[2][1][sign].compose(rot),
-                    c[1][2][sign].compose(rot),
-                    c[0][1][sign].compose(rot),
-                    c[1][0][sign].compose(rot)
-                );
+                (c[index::<1,2,FACE>()], c[index::<0,1,FACE>()], c[index::<1,0,FACE>()], c[index::<2,1,FACE>()]) =
+                    (c[index::<2,1,FACE>()].compose(rot), c[index::<1,2,FACE>()].compose(rot), c[index::<0,1,FACE>()].compose(rot), c[index::<1,0,FACE>()].compose(rot));
             }
             Rotation::Z2 => {
                 // corners
-                (c[2][2][sign], c[0][2][sign], c[0][0][sign], c[2][0][sign]) = (
-                    c[0][0][sign].compose(rot),
-                    c[2][0][sign].compose(rot),
-                    c[2][2][sign].compose(rot),
-                    c[0][2][sign].compose(rot)
-                );
+                (c[index::<2,2,FACE>()], c[index::<0,2,FACE>()], c[index::<0,0,FACE>()], c[index::<2,0,FACE>()]) =
+                    (c[index::<0,0,FACE>()].compose(rot), c[index::<2,0,FACE>()].compose(rot), c[index::<2,2,FACE>()].compose(rot), c[index::<0,2,FACE>()].compose(rot));
                 // edges
-                (c[1][2][sign], c[0][1][sign], c[1][0][sign], c[2][1][sign]) = (
-                    c[1][0][sign].compose(rot),
-                    c[2][1][sign].compose(rot),
-                    c[1][2][sign].compose(rot),
-                    c[0][1][sign].compose(rot)
-                );
+                (c[index::<1,2,FACE>()], c[index::<0,1,FACE>()], c[index::<1,0,FACE>()], c[index::<2,1,FACE>()]) =
+                    (c[index::<1,0,FACE>()].compose(rot), c[index::<2,1,FACE>()].compose(rot), c[index::<1,2,FACE>()].compose(rot), c[index::<0,1,FACE>()].compose(rot));
             }
             Rotation::Z3 => {
                 // corners
-                (c[2][2][sign], c[0][2][sign], c[0][0][sign], c[2][0][sign]) = (
-                    c[0][2][sign].compose(rot),
-                    c[0][0][sign].compose(rot),
-                    c[2][0][sign].compose(rot),
-                    c[2][2][sign].compose(rot)
-                );
+                (c[index::<2,2,FACE>()], c[index::<0,2,FACE>()], c[index::<0,0,FACE>()], c[index::<2,0,FACE>()]) =
+                    (c[index::<0,2,FACE>()].compose(rot), c[index::<0,0,FACE>()].compose(rot), c[index::<2,0,FACE>()].compose(rot), c[index::<2,2,FACE>()].compose(rot));
                 // edges
-                (c[1][2][sign], c[0][1][sign], c[1][0][sign], c[2][1][sign]) = (
-                    c[0][1][sign].compose(rot),
-                    c[1][0][sign].compose(rot),
-                    c[2][1][sign].compose(rot),
-                    c[1][2][sign].compose(rot)
-                );
+                (c[index::<1,2,FACE>()], c[index::<0,1,FACE>()], c[index::<1,0,FACE>()], c[index::<2,1,FACE>()]) =
+                    (c[index::<0,1,FACE>()].compose(rot), c[index::<1,0,FACE>()].compose(rot), c[index::<2,1,FACE>()].compose(rot), c[index::<1,2,FACE>()].compose(rot));
             }
             _ => unreachable!()
         }
+
+        Self { cubelets: c }
     }
 
-    pub fn make_move(&mut self, Move(rot1, rot2, axis): Move) {
+    pub fn make_move(self, Move(rot1, rot2, axis): Move) -> Self {
         let rot1: Rotation = (rot1, axis).into();
         let rot2: Rotation = (rot2, axis).into();
 
-        self.turn_face::<true>(rot1);
-        self.turn_face::<false>(rot2);
+        self.turn_face::<0>(rot1).turn_face::<2>(rot2)
     }
 
     pub fn iter(&self) -> CubeletsIter {
-        CubeletsIter { cube: self, x: 0, y: 0, z: 0 }
+        CubeletsIter { inner: self.cubelets.into_iter() }
+    }
+
+    pub fn parity(&self) -> u8 {
+        self.iter().map(|r| r.len()).sum()
     }
 }
 

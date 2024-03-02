@@ -7,3 +7,4 @@ edition = "2021"
 
 [dependencies]
 my_stuff = { path = "../my_stuff" }
+rand = "0.8.5"
