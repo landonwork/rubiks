@@ -7,7 +7,7 @@ use std::{
     io::Write
 };
 
-use rubiks::rubiks::{CubeletsArrangement as Cube, Move};
+use rubiks::rubiks::{Cube, Move};
 use rubiks::cube::{Cubelet, Rotation, Axis};
 
 const END: u8 = 5;
