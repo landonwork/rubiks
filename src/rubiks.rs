@@ -87,6 +87,11 @@ impl Move {
         }
         res
     };
+
+    pub fn inverse(self) -> Self {
+        let Move(rot1, rot2, axis) = self;
+        Move((4 - rot1) % 4, (4 - rot2) % 4, axis)
+    }
 }
 
 pub const fn index<const X: usize, const Y: usize, const Z: usize>() -> usize {
@@ -360,3 +365,23 @@ impl CubePath {
     }
 }
 
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn test_move_back_and_forth() {
+        use rand::{thread_rng, Rng};
+        use super::*;
+
+        let mut cube = Cube::default();
+        let cube = &mut cube;
+        let mut thread = thread_rng();
+        let moves: Vec<usize> = (0..20).map(|_| thread.gen_range(0..45)).collect();
+        moves.into_iter().for_each(|ind| { *cube = cube.clone().make_move(Move::ALL[ind]); });
+
+        for m in Move::ALL {
+            let inverse = m.inverse();
+            assert_eq!(cube.clone().make_move(m).make_move(inverse), *cube);
+        }
+    }
+}
