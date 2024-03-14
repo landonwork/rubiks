@@ -2,14 +2,24 @@
 // We know there are 24 unique rotations of a cube. Let's make sure we can determine
 // a cube's rotation based on its faces.
 
-use my_stuff::stack::OneTwo;
+use std::fmt::Display;
 
 #[repr(u8)]
-#[derive(Clone, Copy, Debug)]
-pub enum Axis {
-    X,
-    Y,
-    Z,
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Axis { X, Y, Z, }
+
+impl Display for Axis {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "{}",
+            match self {
+                Self::X => "X",
+                Self::Y => "Y",
+                Self::Z => "Z",
+            }
+        )
+    }
 }
 
 /// The 24 possible rotations for a cube in their reduced form
@@ -24,6 +34,41 @@ pub enum Rotation {
     XY, XY2, XY3, XZ, XZ2, XZ3,
     X2Y, X2Y3, X2Z, X2Z3,
     X3Y, X3Y3, X3Z, X3Z3
+}
+
+impl Display for Rotation {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "{}",
+            match self {
+                Self::Neutral => "Neutral",
+                Self::X => "X",
+                Self::X2 => "X2",
+                Self::X3 => "X3",
+                Self::Y => "Y",
+                Self::Y2 => "Y2",
+                Self::Y3 => "Y3",
+                Self::Z => "Z",
+                Self::Z2 => "Z2",
+                Self::Z3 => "Z3",
+                Self::XY => "XY",
+                Self::XY2 => "XY2",
+                Self::XY3 => "XY3",
+                Self::XZ => "XZ",
+                Self::XZ2 => "XZ2",
+                Self::XZ3 => "XZ3",
+                Self::X2Y => "X2Y",
+                Self::X2Y3 => "X2Y3",
+                Self::X2Z => "X2Z",
+                Self::X2Z3 => "X2Z3",
+                Self::X3Y => "X3Y",
+                Self::X3Y3 => "X3Y3",
+                Self::X3Z => "X3Z",
+                Self::X3Z3 => "X3Z3",
+            }
+        )
+    }
 }
 
 impl Default for Rotation {
@@ -137,27 +182,6 @@ impl Rotation {
         }
     }
 
-    /// Describe a rotation as up to two generators (in order)
-    pub const fn into_generators(self) -> OneTwo<Self> {
-        match self {
-            Self::Neutral | Self::X | Self::X2 | Self::X3 | Self::Y | Self::Y2 | Self::Y3 | Self::Z | Self::Z2 | Self::Z3 => OneTwo::One(self),
-            Self::XY => OneTwo::Two(Self::X, Self::Y),
-            Self::XY2 => OneTwo::Two(Self::X, Self::Y2),
-            Self::XY3 => OneTwo::Two(Self::X, Self::Y3),
-            Self::XZ => OneTwo::Two(Self::X, Self::Z),
-            Self::XZ2 => OneTwo::Two(Self::X, Self::Z2),
-            Self::XZ3 => OneTwo::Two(Self::X, Self::Z3),
-            Self::X2Y => OneTwo::Two(Self::X2, Self::Y),
-            Self::X2Y3 => OneTwo::Two(Self::X2, Self::Y3),
-            Self::X2Z => OneTwo::Two(Self::X2, Self::Z),
-            Self::X2Z3 => OneTwo::Two(Self::X2, Self::Z3),
-            Self::X3Y => OneTwo::Two(Self::X3, Self::Y),
-            Self::X3Y3 => OneTwo::Two(Self::X3, Self::Y3),
-            Self::X3Z => OneTwo::Two(Self::X3, Self::Z),
-            Self::X3Z3 => OneTwo::Two(Self::X3, Self::Z3),
-        }
-    }
-
     /// Compose two rotations
     pub fn compose(self, other: Rotation) -> Self {
         ROTATION_GRID[self.into_usize()][other.into_usize()]
@@ -173,12 +197,13 @@ impl Rotation {
     /// "How to get from rotation A to rotation B?"
     /// A * x = B
     /// x = A^-1 * B
+    /// These have been precomputed now
     pub fn difference(self, other: Rotation) -> Self {
         DIFFERENCES[self.into_usize()][other.into_usize()]
     }
 
     /// Find the rotation of a cube from two facelets
-    /// TODO: Assert that the facelets cannot be opposing sides
+    /// TODO: Assert that the facelets cannot be poles
     pub fn from_two_facelets(pair1: &FacePair, pair2: &FacePair) -> Option<Self> {
         for (face_pairs, rotation) in CUBELET_PAIRS {
             if face_pairs.contains(pair1) && face_pairs.contains(pair2) {

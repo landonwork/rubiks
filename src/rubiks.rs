@@ -1,6 +1,6 @@
 use std::{fmt::Display, array};
 
-use crate::cube::{Axis, Rotation};
+use crate::{cube::{Axis, Rotation}, view::pad_right_to};
 
 // My own way of representing the arrangement of a Rubiks' cube
 // relying on minimum number of moves from the solved arrangement.
@@ -93,13 +93,14 @@ pub const fn index<const X: usize, const Y: usize, const Z: usize>() -> usize {
     assert!(X < 3);
     assert!(Y < 3);
     assert!(Z < 3);
+    assert!(!(X==1 && Y==1) && !(X==1 && Z==1) && !(Y==1 && Z==1));
 
     Z + 3 * Y + 9 * X
     - (X==0 && Z==2 && Y==1 || Y==2 || X>0) as usize
     - (X==1 && (Z==2 || Y==2) || X==2) as usize
     - (X==1 && Y==2 || X==2) as usize * 3
     - (X==1 && Y==2 && Z==2 || X==2) as usize
-    - (X==2 && (Z==2 && Y==1 || Y==2 || X>0)) as usize
+    - (X==2 && (Z==2 && Y==1 || Y==2)) as usize
 }
 
 /// A Rubiks' cube arrangement, represented by the rotation of
@@ -128,18 +129,35 @@ impl Display for Cube {
         let c = &self.cubelets;
         writeln!(
             f,
-            "{:?}\t{:?}\t{:?}\t{:?}\t{:?}\t{:?}\t{:?}\t{:?}",
-            c[index::<0,2,2>()], c[index::<0,1,2>()], c[index::<0,0,2>()], c[index::<1,0,2>()], c[index::<2,0,2>()], c[index::<2,1,2>()], c[index::<2,2,2>()], c[index::<1,2,2>()],
+            "{}{}{}{}{}{}{}{}",
+            pad_right_to(&c[index::<0,2,2>()], 8),
+            pad_right_to(&c[index::<0,1,2>()], 8),
+            pad_right_to(&c[index::<0,0,2>()], 8),
+            pad_right_to(&c[index::<1,0,2>()], 8),
+            pad_right_to(&c[index::<2,0,2>()], 8),
+            pad_right_to(&c[index::<2,1,2>()], 8),
+            pad_right_to(&c[index::<2,2,2>()], 8),
+            pad_right_to(&c[index::<1,2,2>()], 8),
         )?;
         writeln!(
             f,
-            "{:?}\t{:?}\t{:?}\t{:?}\t{:?}\t{:?}\t{:?}\t{:?}",
-            c[index::<0,2,1>()], "O", c[index::<0,0,1>()], "G", c[index::<2,0,1>()], "R", c[index::<2,2,1>()], "B",
+            "{}O       {}G       {}R       {}B       ",
+            pad_right_to(&c[index::<0,2,1>()], 8),
+            pad_right_to(&c[index::<0,0,1>()], 8),
+            pad_right_to(&c[index::<2,0,1>()], 8),
+            pad_right_to(&c[index::<2,2,1>()], 8),
         )?;
         writeln!(
             f,
-            "{:?}\t{:?}\t{:?}\t{:?}\t{:?}\t{:?}\t{:?}\t{:?}",
-            c[index::<0,2,0>()], c[index::<0,1,0>()], c[index::<0,0,0>()], c[index::<1,0,0>()], c[index::<2,0,0>()], c[index::<2,1,0>()], c[index::<2,2,0>()], c[index::<1,2,0>()],
+            "{}{}{}{}{}{}{}{}",
+            pad_right_to(&c[index::<0,2,0>()], 8),
+            pad_right_to(&c[index::<0,1,0>()], 8),
+            pad_right_to(&c[index::<0,0,0>()], 8),
+            pad_right_to(&c[index::<1,0,0>()], 8),
+            pad_right_to(&c[index::<2,0,0>()], 8),
+            pad_right_to(&c[index::<2,1,0>()], 8),
+            pad_right_to(&c[index::<2,2,0>()], 8),
+            pad_right_to(&c[index::<1,2,0>()], 8),
         )?;
         Ok(())
     }
@@ -174,7 +192,7 @@ fn turn_face_x3<const FACE: usize>(cube: Cube, rot: Rotation) -> Cube {
         (c[index::<FACE,0,2>()].compose(rot), c[index::<FACE,0,0>()].compose(rot), c[index::<FACE,2,0>()].compose(rot), c[index::<FACE,2,2>()].compose(rot));
     // edges
     (c[index::<FACE,1,2>()], c[index::<FACE,0,1>()], c[index::<FACE,1,0>()], c[index::<FACE,2,1>()]) =
-        (c[index::<FACE,0,1>()].compose(rot), c[index::<FACE,1,2>()].compose(rot), c[index::<FACE,2,1>()].compose(rot), c[index::<FACE,1,0>()].compose(rot));
+        (c[index::<FACE,0,1>()].compose(rot), c[index::<FACE,1,0>()].compose(rot), c[index::<FACE,2,1>()].compose(rot), c[index::<FACE,1,2>()].compose(rot));
     Cube { cubelets: c }
 }
 
@@ -288,6 +306,57 @@ impl Cube {
 
     pub fn parity(&self) -> u8 {
         self.iter().map(|r| r.len()).sum()
+    }
+}
+
+pub struct CubePath {
+    pub moves: Vec<Move>,
+    // cubes is always going to be 1 longer than moves
+    pub cubes: Vec<Cube>
+}
+
+impl Default for CubePath {
+    fn default() -> Self {
+        CubePath { moves: vec![], cubes: vec![Cube::default()] }
+    }
+}
+
+impl CubePath {
+    pub fn make_move(&mut self, Move(rot1, rot2, axis): Move) -> &mut Self {
+        // Update moves and then update cube
+        let ind = self.moves.len().saturating_sub(1);
+
+        // If self.moves is not empty
+        if let Some(last_move) = self.moves.get_mut(ind) {
+            // If the move is on the same axis as the most recent
+            if last_move.2 == axis {
+                // Mutate the values of the most recent move
+                last_move.0 = (last_move.0 + rot1) % 4;
+                last_move.1 = (last_move.1 + rot2) % 4;
+                // Check if it was the inverse and has cancelled out
+                if last_move.0 == 0 && last_move.1 == 0 {
+                    // If so, pop the move and the latest cube
+                    self.moves.pop();
+                    self.cubes.pop();
+                } else {
+                    self.cubes[ind+1] = self.cubes[ind].clone().make_move(self.moves[ind]);
+                }
+            // If the move is on a different axis than the most recent
+            } else {
+                // Always push the move onto the stack
+                self.moves.push(Move(rot1, rot2, axis));
+                // Always push the new current cube based off the previous one
+                self.cubes.push(self.cubes[self.moves.len() - 1].clone().make_move(Move(rot1, rot2, axis)));
+            }
+        // If self.moves is empty
+        } else {
+            // Always push the move onto the stack
+            self.moves.push(Move(rot1, rot2, axis));
+            // Always push the new current cube based off the previous one
+            self.cubes.push(self.cubes[self.moves.len() - 1].clone().make_move(Move(rot1, rot2, axis)));
+        }
+
+        self
     }
 }
 
