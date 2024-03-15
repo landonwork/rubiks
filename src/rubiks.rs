@@ -1,4 +1,4 @@
-use std::{fmt::Display, array};
+use std::{fmt::Display, array, io, str::FromStr};
 
 use crate::{cube::{Axis, Rotation}, view::pad_right_to};
 
@@ -20,6 +20,40 @@ use crate::{cube::{Axis, Rotation}, view::pad_right_to};
 /// and the axis on which the turns happen
 #[derive(Clone, Copy, Debug)]
 pub struct Move(pub u8, pub u8, pub Axis);
+
+impl ToString for Move {
+    fn to_string(&self) -> String {
+        format!("{}{}{}", self.2, self.0, self.1)
+    }
+}
+
+impl FromStr for Move {
+    type Err = io::Error;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        if s.len() == 3 {
+            let [axis, rot1, rot2] = s.as_bytes().try_into().unwrap();
+            let axis = match axis {
+                b'X' => Axis::X,
+                b'Y' => Axis::Y,
+                b'Z' => Axis::Z,
+                _ => { return Err(io::Error::new(io::ErrorKind::InvalidData, s)) }
+            };
+            let rot1 = match rot1 {
+                b'0' | b'1' | b'2' | b'3' => rot1 - b'0',
+                _ => { return Err(io::Error::new(io::ErrorKind::InvalidData, s)) }
+            };
+            let rot2 = match rot2 {
+                b'0' | b'1' | b'2' | b'3' => rot2 - b'0',
+                _ => { return Err(io::Error::new(io::ErrorKind::InvalidData, s)) }
+            };
+
+            Ok(Move(rot1, rot2, axis))
+        } else {
+            Err(io::Error::new(io::ErrorKind::InvalidData, s))
+        }
+    }
+}
 
 impl Move {
     pub const ALL: [Move; 45] = {

@@ -36,6 +36,18 @@ pub enum Rotation {
     X3Y, X3Y3, X3Z, X3Z3
 }
 
+impl TryFrom<u8> for Rotation {
+    type Error = u8;
+
+    fn try_from(value: u8) -> Result<Self, Self::Error> {
+        if value >= 24 {
+            Err(value)
+        } else {
+            Ok(unsafe { std::mem::transmute(value) })
+        }
+    }
+}
+
 impl Display for Rotation {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(
