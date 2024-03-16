@@ -8,7 +8,7 @@ pub struct MovesList<'a>(pub &'a [Move]);
 impl Display for MovesList<'_> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         for m in self.0 {
-            writeln!(f, "{}{}{}", m.2, m.0, m.1)?;
+            writeln!(f, "{}", m)?;
         }
         Ok(())
     }

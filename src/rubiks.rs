@@ -21,9 +21,9 @@ use crate::{cube::{Axis, Rotation}, view::pad_right_to};
 #[derive(Clone, Copy, Debug)]
 pub struct Move(pub u8, pub u8, pub Axis);
 
-impl ToString for Move {
-    fn to_string(&self) -> String {
-        format!("{}{}{}", self.2, self.0, self.1)
+impl Display for Move {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}{}{}", self.2, self.0, self.1)
     }
 }
 
