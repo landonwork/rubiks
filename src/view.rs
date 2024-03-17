@@ -1,7 +1,7 @@
 // I want to put wrappers here that will change the way different things are formatted to strings
 use std::{fmt::Display, io, str::FromStr};
 
-use crate::{rubiks::{Move, Cube}, cube::Rotation};
+use crate::{cube::{Move, Cube, index}, cubelet::Rotation};
 
 pub struct MovesList<'a>(pub &'a [Move]);
 
@@ -14,18 +14,49 @@ impl Display for MovesList<'_> {
     }
 }
 
-pub struct CompressedCube(pub Cube);
+pub struct DisplayCube(pub Cube);
 
-impl Display for CompressedCube {
+impl Display for DisplayCube {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        for rot in self.0.iter() {
-            write!(f, "{}", ((rot as u8) + b'A') as char)?;
-        }
+        let c = &self.0.cubelets;
+        writeln!(
+            f,
+            "{}{}{}{}{}{}{}{}",
+            pad_right_to(&c[index::<0,2,2>()], 8),
+            pad_right_to(&c[index::<0,1,2>()], 8),
+            pad_right_to(&c[index::<0,0,2>()], 8),
+            pad_right_to(&c[index::<1,0,2>()], 8),
+            pad_right_to(&c[index::<2,0,2>()], 8),
+            pad_right_to(&c[index::<2,1,2>()], 8),
+            pad_right_to(&c[index::<2,2,2>()], 8),
+            pad_right_to(&c[index::<1,2,2>()], 8),
+        )?;
+        writeln!(
+            f,
+            "{}O       {}G       {}R       {}B       ",
+            pad_right_to(&c[index::<0,2,1>()], 8),
+            pad_right_to(&c[index::<0,0,1>()], 8),
+            pad_right_to(&c[index::<2,0,1>()], 8),
+            pad_right_to(&c[index::<2,2,1>()], 8),
+        )?;
+        writeln!(
+            f,
+            "{}{}{}{}{}{}{}{}",
+            pad_right_to(&c[index::<0,2,0>()], 8),
+            pad_right_to(&c[index::<0,1,0>()], 8),
+            pad_right_to(&c[index::<0,0,0>()], 8),
+            pad_right_to(&c[index::<1,0,0>()], 8),
+            pad_right_to(&c[index::<2,0,0>()], 8),
+            pad_right_to(&c[index::<2,1,0>()], 8),
+            pad_right_to(&c[index::<2,2,0>()], 8),
+            pad_right_to(&c[index::<1,2,0>()], 8),
+        )?;
         Ok(())
     }
 }
 
-impl FromStr for CompressedCube {
+
+impl FromStr for Cube {
     type Err = io::Error;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
@@ -36,7 +67,7 @@ impl FromStr for CompressedCube {
                 let val = b - b'A';
                 cubelets[i] = val.try_into().map_err(|_| io::Error::new(io::ErrorKind::InvalidData, s))?;
             }
-            Ok(CompressedCube(Cube { cubelets }))
+            Ok(Cube { cubelets })
         } else {
             Err(io::Error::new(io::ErrorKind::InvalidData, s))
         }

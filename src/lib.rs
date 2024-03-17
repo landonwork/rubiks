@@ -1,3 +1,4 @@
 pub mod cube;
-pub mod rubiks;
+pub mod cubelet;
+pub mod graph;
 pub mod view;

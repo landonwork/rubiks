@@ -1,13 +1,13 @@
 use std::io::{self, stdout};
 
 use crossterm::{
-    event::{self, Event, KeyCode, KeyModifiers},
+    event::{self, Event, KeyCode},
     terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
     ExecutableCommand,
 };
 use ratatui::{prelude::*, widgets::*};
 
-use rubiks::{view::MovesList, rubiks::{CubePath, Move}, cube::{Axis, Rotation}};
+use rubiks::{view::MovesList, cube::{CubePath, Move}, cubelet::Axis};
 
 #[derive(Default)]
 struct App {

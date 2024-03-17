@@ -1,14 +1,18 @@
 #![allow(dead_code)]
 #![allow(unused_imports)]
 
-use std::borrow::BorrowMut;
 use std::{
-    collections::HashMap,
-    io::Write
+    borrow::BorrowMut,
+    collections::HashMap
 };
+use std::io::Write;
 
-use rubiks::rubiks::{Cube, Move, index};
-use rubiks::cube::{Cubelet, Rotation, Axis};
+use rubiks::{
+    cube::{Cube, Move, Info, index},
+    cubelet::{Cubelet, Rotation, Axis},
+    view::DisplayCube
+};
+use rubiks::graph::CubeGraph;
 
 const END: u8 = 5;
 
@@ -17,57 +21,33 @@ fn main() -> Result<(), std::io::Error> {
         .make_move(Move(0, 1, Axis::X))
         .make_move(Move(0, 1, Axis::Y))
         .make_move(Move(0, 1, Axis::Z));
-    println!("{}", my_cube);
+    println!("{}", &my_cube);
+    println!("{}", DisplayCube(my_cube));
 
-    let mut cubes = HashMap::from([
-        (Cube::default(), Info { depth: 0, parity: 0 })
-    ]);
-    cubes.reserve(37_000_000);
+    let mut graph = CubeGraph::new();
 
     // depth-first search
-    dfs(&mut cubes, Cube::default(), None, 0, END);
+    dfs(&mut graph, Cube::default(), None, 0, END);
+    graph.save("depth5.txt");
 
     let mut summary: HashMap<u8, (usize, usize)> = HashMap::new();
-    for (_, info) in cubes {
+    for info in graph.graph.node_weights() {
         let Info { parity, depth } = info;
-        let val = summary.entry(depth).or_insert((0, 0));
+        let val = summary.entry(*depth).or_insert((0, 0));
         val.0 += 1;
-        val.1 += parity as usize;
+        val.1 += *parity as usize;
     }
 
-    println!("Size of CubeletsArrangement: {} bytes", std::mem::size_of::<Cube>());
+    println!("Size of Cube: {} bytes", std::mem::size_of::<Cube>());
     for (k, v) in summary {
         println!("{}: Cubes={}, Avg. parity={}", k, v.0, v.1 as f32 / v.0 as f32);
     }
-
-    println!("index::<0,0,0>() = {}", index::<0,0,0>());
-    println!("index::<0,0,1>() = {}", index::<0,0,1>());
-    println!("index::<0,0,2>() = {}", index::<0,0,2>());
-    println!("index::<0,1,0>() = {}", index::<0,1,0>());
-    println!("index::<0,1,2>() = {}", index::<0,1,2>());
-    println!("index::<0,2,0>() = {}", index::<0,2,0>());
-    println!("index::<0,2,1>() = {}", index::<0,2,1>());
-    println!("index::<0,2,2>() = {}", index::<0,2,2>());
-                                                   
-    println!("index::<1,0,0>() = {}", index::<1,0,0>());
-    println!("index::<1,0,2>() = {}", index::<1,0,2>());
-    println!("index::<1,2,0>() = {}", index::<1,2,0>());
-    println!("index::<1,2,2>() = {}", index::<1,2,2>());
-                                                   
-    println!("index::<2,0,0>() = {}", index::<2,0,0>());
-    println!("index::<2,0,1>() = {}", index::<2,0,1>());
-    println!("index::<2,0,2>() = {}", index::<2,0,2>());
-    println!("index::<2,1,0>() = {}", index::<2,1,0>());
-    println!("index::<2,1,2>() = {}", index::<2,1,2>());
-    println!("index::<2,2,0>() = {}", index::<2,2,0>());
-    println!("index::<2,2,1>() = {}", index::<2,2,1>());
-    println!("index::<2,2,2>() = {}", index::<2,2,2>());
 
     Ok(())
 }
 
 fn dfs(
-    cubes: &mut HashMap<Cube, Info>,
+    graph: &mut CubeGraph,
     cube: Cube,
     last_move: Option<Move>,
     depth: u8,
@@ -83,26 +63,15 @@ fn dfs(
         let new_depth = depth + 1;
         for m in iter {
             let new = cube.clone().make_move(m);
-            let info = cubes.entry(new.clone()).or_insert(Info {
+            let info = Info {
                 depth: new_depth,
                 parity: new.parity()
-            });
+            };
 
-            // Dijkstra bc depth-first gets things wrong
-            // if info.depth < new_depth {
-            //     println!("{}", &new);
-            // }
-            info.depth = std::cmp::min(new_depth, info.depth);
+            graph.add_cube(cube.clone(), new.clone(), info, m);
 
-            dfs(cubes, new, Some(m), new_depth, max_depth);
+            dfs(graph, new, Some(m), new_depth, max_depth);
         }
     }
-}
-
-#[derive(Debug)]
-struct Info {
-    depth: u8,
-    parity: u8,
-    // distance: usize // TODO
 }
 
