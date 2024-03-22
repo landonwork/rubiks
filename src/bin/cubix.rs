@@ -7,7 +7,7 @@ use crossterm::{
 };
 use ratatui::{prelude::*, widgets::*};
 
-use rubiks::{view::MovesList, cube::{CubePath, Move}, cubelet::Axis};
+use rubiks::{view::{MovesList, DisplayCube}, cube::{CubePath, Move}, cubelet::Axis};
 
 #[derive(Default)]
 struct App {
@@ -75,9 +75,7 @@ fn handle_events(app: &mut App) -> io::Result<bool> {
                         app.cube.make_move(Move(0, 1, Axis::Z));
                     }
                     KeyCode::Char('u') => {
-                        if app.cube.moves.pop().is_some() {
-                            app.cube.cubes.pop();
-                        }
+                        app.cube.pop();
                     }
                     KeyCode::Char('R') => {
                         app.cube = CubePath::default();
@@ -102,18 +100,21 @@ fn ui(frame: &mut Frame, app: &App) {
     )
     .split(main_layout[0]);
 
+    // Cube viewer
     frame.render_widget(
-        Paragraph::new(format!("{}", &app.cube.cubes[app.cube.cubes.len()-1]))
+        Paragraph::new(format!("{}", DisplayCube(app.cube.cubes[app.cube.cubes.len()-1].clone())))
             .block(Block::default().title("Current state").borders(Borders::ALL)),
         inner_layout[0]
     );
 
+    // Cubix instructions
     frame.render_widget(
         Paragraph::new(include_str!("instructions.txt"))
             .block(Block::default().title("Instructions").borders(Borders::ALL)),
         inner_layout[1]
     );
 
+    // Path
     frame.render_widget(
         Paragraph::new(format!("{}", MovesList(&app.cube.moves))).block(
             Block::default().title("Path").borders(Borders::ALL)

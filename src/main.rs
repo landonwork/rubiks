@@ -28,7 +28,7 @@ fn main() -> Result<(), std::io::Error> {
 
     // depth-first search
     dfs(&mut graph, Cube::default(), None, 0, END);
-    graph.save("depth5.txt");
+    graph.save("depth5.txt")?;
 
     let mut summary: HashMap<u8, (usize, usize)> = HashMap::new();
     for info in graph.graph.node_weights() {

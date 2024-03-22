@@ -277,8 +277,8 @@ fn turn_face_z3<const FACE: usize>(cube: Cube, rot: Rotation) -> Cube {
     Cube { cubelets: c }
 }
 
-// Using function pointers instead of a 9-arm match statement shaves about a second per 10 million
-// cubes searched.
+// Using function pointers in an array instead of a 9-arm match statement
+// Is it faster? Idk.
 static TURN_CLOSE_FACES: [fn(Cube, Rotation) -> Cube; 9] = [
     turn_face_x::<0>, turn_face_x2::<0>, turn_face_x3::<0>,
     turn_face_y::<0>, turn_face_y2::<0>, turn_face_y3::<0>,
@@ -332,7 +332,38 @@ impl Default for CubePath {
     }
 }
 
+#[derive(Clone, Copy)]
+struct Saturating(usize);
+
+impl Saturating {
+    pub fn sub(self, other: usize) -> Option<usize> {
+        if other > self.0 {
+            None
+        } else {
+            Some(self.0 - other)
+        }
+    }
+}
+
+impl From<Saturating> for usize {
+    fn from(value: Saturating) -> Self {
+        value.0
+    }
+}
+
 impl CubePath {
+    pub fn last_cube(&self) -> &Cube {
+        &self.cubes[self.cubes.len() - 1]
+    }
+
+    pub fn penultimate_cube(&self) -> Option<&Cube> {
+        self.cubes.get(Saturating(self.cubes.len()).sub(2)?)
+    }
+
+    pub fn last_move(&self) -> Option<&Move> {
+        self.moves.get(self.moves.len().saturating_sub(1))
+    }
+
     pub fn make_move(&mut self, Move(rot1, rot2, axis): Move) -> &mut Self {
         // Update moves and then update cube
         let ind = self.moves.len().saturating_sub(1);
@@ -347,6 +378,8 @@ impl CubePath {
                 // Check if it was the inverse and has cancelled out
                 if last_move.0 == 0 && last_move.1 == 0 {
                     // If so, pop the move and the latest cube
+                    debug_assert_eq!(self.penultimate_cube().unwrap(), &self.last_cube().clone().make_move(Move(rot1, rot2, axis)));
+
                     self.moves.pop();
                     self.cubes.pop();
                 } else {
@@ -364,10 +397,22 @@ impl CubePath {
             // Always push the move onto the stack
             self.moves.push(Move(rot1, rot2, axis));
             // Always push the new current cube based off the previous one
-            self.cubes.push(self.cubes[self.moves.len() - 1].clone().make_move(Move(rot1, rot2, axis)));
+            self.cubes.push(self.last_cube().clone().make_move(Move(rot1, rot2, axis)));
         }
 
         self
+    }
+
+    pub fn pop(&mut self) -> Option<Cube> {
+        if let Some(last_move) = self.last_move() {
+            let inv = last_move.inverse();
+            // Because there was a move, we know there are at least 2 cubes
+            debug_assert_eq!(self.penultimate_cube().unwrap(), &self.last_cube().clone().make_move(inv));
+            self.moves.pop();
+            self.cubes.pop()
+        } else {
+            None
+        }
     }
 }
 
