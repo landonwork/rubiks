@@ -107,76 +107,11 @@ impl From<(u8, Axis)> for Rotation {
     }
 }
 
-const ROTATION_GRID: [[Rotation; 24]; 24] = {
-    use Rotation::*;
-    [
-        [Neutral, X, X2, X3, Y, Y2, Y3, Z, Z2, Z3, XY, XY2, XY3, XZ, XZ2, XZ3, X2Y, X2Y3, X2Z, X2Z3, X3Y, X3Y3, X3Z, X3Z3],
-        [X, X2, X3, Neutral, XY, XY2, XY3, XZ, XZ2, XZ3, X2Y, Z2, X2Y3, X2Z, Y2, X2Z3, X3Y, X3Y3, X3Z, X3Z3, Y, Y3, Z, Z3],
-        [X2, X3, Neutral, X, X2Y, Z2, X2Y3, X2Z, Y2, X2Z3, X3Y, XZ2, X3Y3, X3Z, XY2, X3Z3, Y, Y3, Z, Z3, XY, XY3, XZ, XZ3],
-        [X3, Neutral, X, X2, X3Y, XZ2, X3Y3, X3Z, XY2, X3Z3, Y, Y2, Y3, Z, Z2, Z3, XY, XY3, XZ, XZ3, X2Y, X2Y3, X2Z, X2Z3],
-        [Y, XZ, X2Y3, X3Z3, Y2, Y3, Neutral, X3Y, X2Y, XY, X2Z, X3Z, Z, XZ2, XZ3, X, X2, Z2, X3Y3, XY3, Z3, X2Z3, X3, XY2],
-        [Y2, XZ2, Z2, XY2, Y3, Neutral, Y, X2Z3, X2, X2Z, X3Y3, X3, X3Y, XZ3, X, XZ, X2Y3, X2Y, Z3, Z, XY3, XY, X3Z3, X3Z],
-        [Y3, XZ3, X2Y, X3Z, Neutral, Y, Y2, XY3, X2Y3, X3Y3, X2Z3, X3Z3, Z3, X, XZ, XZ2, Z2, X2, XY, X3Y, Z, X2Z, XY2, X3],
-        [Z, XY3, X2Z3, X3Y, XZ, X2Z, X3Z, Z2, Z3, Neutral, X, XY, XY2, X2Y3, X3Y3, Y3, X3Z3, XZ3, X2, Y2, XZ2, X3, X2Y, Y],
-        [Z2, XY2, Y2, XZ2, X2Y3, X2, X2Y, Z3, Neutral, Z, XY3, X, XY, X3Z3, X3, X3Z, Y3, Y, X2Z3, X2Z, X3Y3, X3Y, XZ3, XZ],
-        [Z3, XY, X2Z, X3Y3, XZ3, X2Z3, X3Z3, Neutral, Z, Z2, XY2, XY3, X, Y, X3Y, X2Y, X3Z, XZ, Y2, X2, X3, XZ2, Y3, X2Y3],
-        [XY, X2Z, X3Y3, Z3, XY2, XY3, X, Y, X3Y, X2Y, X3Z, Z, XZ, Y2, X2Z3, X2, X3, XZ2, Y3, X2Y3, XZ3, X3Z3, Neutral, Z2],
-        [XY2, Y2, XZ2, Z2, XY3, X, XY, X3Z3, X3, X3Z, Y3, Neutral, Y, X2Z3, X2, X2Z, X3Y3, X3Y, XZ3, XZ, X2Y3, X2Y, Z3, Z],
-        [XY3, X2Z3, X3Y, Z, X, XY, XY2, X2Y3, X3Y3, Y3, X3Z3, Z3, XZ3, X2, X2Z, Y2, XZ2, X3, X2Y, Y, XZ, X3Z, Z2, Neutral],
-        [XZ, X2Y3, X3Z3, Y, X2Z, X3Z, Z, XZ2, XZ3, X, X2, X2Y, Z2, X3Y3, Y3, XY3, Z3, X2Z3, X3, XY2, Y2, Neutral, X3Y, XY],
-        [XZ2, Z2, XY2, Y2, X3Y3, X3, X3Y, XZ3, X, XZ, X2Y3, X2, X2Y, Z3, Neutral, Z, XY3, XY, X3Z3, X3Z, Y3, Y, X2Z3, X2Z],
-        [XZ3, X2Y, X3Z, Y3, X2Z3, X3Z3, Z3, X, XZ, XZ2, Z2, X2Y3, X2, XY, Y, X3Y, Z, X2Z, XY2, X3, Neutral, Y2, XY3, X3Y3],
-        [X2Y, X3Z, Y3, XZ3, Z2, X2Y3, X2, XY, Y, X3Y, Z, XZ, X2Z, XY2, X3Z3, X3, Neutral, Y2, XY3, X3Y3, X2Z3, Z3, X, XZ2],
-        [X2Y3, X3Z3, Y, XZ, X2, X2Y, Z2, X3Y3, Y3, XY3, Z3, XZ3, X2Z3, X3, X3Z, XY2, Y2, Neutral, X3Y, XY, X2Z, Z, XZ2, X],
-        [X2Z, X3Y3, Z3, XY, X3Z, Z, XZ, Y2, X2Z3, X2, X3, X3Y, XZ2, Y3, XY3, X2Y3, XZ3, X3Z3, Neutral, Z2, XY2, X, Y, X2Y],
-        [X2Z3, X3Y, Z, XY3, X3Z3, Z3, XZ3, X2, X2Z, Y2, XZ2, X3Y3, X3, X2Y, XY, Y, XZ, X3Z, Z2, Neutral, X, XY2, X2Y3, Y3],
-        [X3Y, Z, XY3, X2Z3, XZ2, X3Y3, X3, X2Y, XY, Y, XZ, X2Z, X3Z, Z2, Z3, Neutral, X, XY2, X2Y3, Y3, X3Z3, XZ3, X2, Y2],
-        [X3Y3, Z3, XY, X2Z, X3, X3Y, XZ2, Y3, XY3, X2Y3, XZ3, X2Z3, X3Z3, Neutral, Z, Z2, XY2, X, Y, X2Y, X3Z, XZ, Y2, X2],
-        [X3Z, Y3, XZ3, X2Y, Z, XZ, X2Z, XY2, X3Z3, X3, Neutral, Y, Y2, XY3, X2Y3, X3Y3, X2Z3, Z3, X, XZ2, Z2, X2, XY, X3Y],
-        [X3Z3, Y, XZ, X2Y3, Z3, XZ3, X2Z3, X3, X3Z, XY2, Y2, Y3, Neutral, X3Y, X2Y, XY, X2Z, Z, XZ2, X, X2, Z2, X3Y3, XY3],
-    ]
-};
-
-const INVERSES: [Rotation; 24] = {
-    use Rotation::*;
-    [Neutral, X3, X2, X, Y3, Y2, Y, Z3, Z2, Z, X3Z, XY2, X3Z3, X3Y3, XZ2, X3Y, X2Y, X2Y3, X2Z, X2Z3, XZ3, XZ, XY, XY3]
-};
-
-const DIFFERENCES: [[Rotation; 24]; 24] = {
-    use Rotation::*;
-    [
-        [Neutral, X, X2, X3, Y, Y2, Y3, Z, Z2, Z3, XY, XY2, XY3, XZ, XZ2, XZ3, X2Y, X2Y3, X2Z, X2Z3, X3Y, X3Y3, X3Z, X3Z3],
-        [X3, Neutral, X, X2, X3Y, XZ2, X3Y3, X3Z, XY2, X3Z3, Y, Y2, Y3, Z, Z2, Z3, XY, XY3, XZ, XZ3, X2Y, X2Y3, X2Z, X2Z3],
-        [X2, X3, Neutral, X, X2Y, Z2, X2Y3, X2Z, Y2, X2Z3, X3Y, XZ2, X3Y3, X3Z, XY2, X3Z3, Y, Y3, Z, Z3, XY, XY3, XZ, XZ3],
-        [X, X2, X3, Neutral, XY, XY2, XY3, XZ, XZ2, XZ3, X2Y, Z2, X2Y3, X2Z, Y2, X2Z3, X3Y, X3Y3, X3Z, X3Z3, Y, Y3, Z, Z3],
-        [Y3, XZ3, X2Y, X3Z, Neutral, Y, Y2, XY3, X2Y3, X3Y3, X2Z3, X3Z3, Z3, X, XZ, XZ2, Z2, X2, XY, X3Y, Z, X2Z, XY2, X3],
-        [Y2, XZ2, Z2, XY2, Y3, Neutral, Y, X2Z3, X2, X2Z, X3Y3, X3, X3Y, XZ3, X, XZ, X2Y3, X2Y, Z3, Z, XY3, XY, X3Z3, X3Z],
-        [Y, XZ, X2Y3, X3Z3, Y2, Y3, Neutral, X3Y, X2Y, XY, X2Z, X3Z, Z, XZ2, XZ3, X, X2, Z2, X3Y3, XY3, Z3, X2Z3, X3, XY2],
-        [Z3, XY, X2Z, X3Y3, XZ3, X2Z3, X3Z3, Neutral, Z, Z2, XY2, XY3, X, Y, X3Y, X2Y, X3Z, XZ, Y2, X2, X3, XZ2, Y3, X2Y3],
-        [Z2, XY2, Y2, XZ2, X2Y3, X2, X2Y, Z3, Neutral, Z, XY3, X, XY, X3Z3, X3, X3Z, Y3, Y, X2Z3, X2Z, X3Y3, X3Y, XZ3, XZ],
-        [Z, XY3, X2Z3, X3Y, XZ, X2Z, X3Z, Z2, Z3, Neutral, X, XY, XY2, X2Y3, X3Y3, Y3, X3Z3, XZ3, X2, Y2, XZ2, X3, X2Y, Y],
-        [X3Z, Y3, XZ3, X2Y, Z, XZ, X2Z, XY2, X3Z3, X3, Neutral, Y, Y2, XY3, X2Y3, X3Y3, X2Z3, Z3, X, XZ2, Z2, X2, XY, X3Y],
-        [XY2, Y2, XZ2, Z2, XY3, X, XY, X3Z3, X3, X3Z, Y3, Neutral, Y, X2Z3, X2, X2Z, X3Y3, X3Y, XZ3, XZ, X2Y3, X2Y, Z3, Z],
-        [X3Z3, Y, XZ, X2Y3, Z3, XZ3, X2Z3, X3, X3Z, XY2, Y2, Y3, Neutral, X3Y, X2Y, XY, X2Z, Z, XZ2, X, X2, Z2, X3Y3, XY3],
-        [X3Y3, Z3, XY, X2Z, X3, X3Y, XZ2, Y3, XY3, X2Y3, XZ3, X2Z3, X3Z3, Neutral, Z, Z2, XY2, X, Y, X2Y, X3Z, XZ, Y2, X2],
-        [XZ2, Z2, XY2, Y2, X3Y3, X3, X3Y, XZ3, X, XZ, X2Y3, X2, X2Y, Z3, Neutral, Z, XY3, XY, X3Z3, X3Z, Y3, Y, X2Z3, X2Z],
-        [X3Y, Z, XY3, X2Z3, XZ2, X3Y3, X3, X2Y, XY, Y, XZ, X2Z, X3Z, Z2, Z3, Neutral, X, XY2, X2Y3, Y3, X3Z3, XZ3, X2, Y2],
-        [X2Y, X3Z, Y3, XZ3, Z2, X2Y3, X2, XY, Y, X3Y, Z, XZ, X2Z, XY2, X3Z3, X3, Neutral, Y2, XY3, X3Y3, X2Z3, Z3, X, XZ2],
-        [X2Y3, X3Z3, Y, XZ, X2, X2Y, Z2, X3Y3, Y3, XY3, Z3, XZ3, X2Z3, X3, X3Z, XY2, Y2, Neutral, X3Y, XY, X2Z, Z, XZ2, X],
-        [X2Z, X3Y3, Z3, XY, X3Z, Z, XZ, Y2, X2Z3, X2, X3, X3Y, XZ2, Y3, XY3, X2Y3, XZ3, X3Z3, Neutral, Z2, XY2, X, Y, X2Y],
-        [X2Z3, X3Y, Z, XY3, X3Z3, Z3, XZ3, X2, X2Z, Y2, XZ2, X3Y3, X3, X2Y, XY, Y, XZ, X3Z, Z2, Neutral, X, XY2, X2Y3, Y3],
-        [XZ3, X2Y, X3Z, Y3, X2Z3, X3Z3, Z3, X, XZ, XZ2, Z2, X2Y3, X2, XY, Y, X3Y, Z, X2Z, XY2, X3, Neutral, Y2, XY3, X3Y3],
-        [XZ, X2Y3, X3Z3, Y, X2Z, X3Z, Z, XZ2, XZ3, X, X2, X2Y, Z2, X3Y3, Y3, XY3, Z3, X2Z3, X3, XY2, Y2, Neutral, X3Y, XY],
-        [XY, X2Z, X3Y3, Z3, XY2, XY3, X, Y, X3Y, X2Y, X3Z, Z, XZ, Y2, X2Z3, X2, X3, XZ2, Y3, X2Y3, XZ3, X3Z3, Neutral, Z2],
-        [XY3, X2Z3, X3Y, Z, X, XY, XY2, X2Y3, X3Y3, Y3, X3Z3, Z3, XZ3, X2, X2Z, Y2, XZ2, X3, X2Y, Y, XZ, X3Z, Z2, Neutral],
-    ]
-};
-
 impl Rotation {
     /// All members of the cube rotation group
-    pub const VALUES: [Rotation; 24] = [Self::Neutral, Self::X, Self::X2, Self::X3, Self::Y, Self::Y2, Self::Y3, Self::Z, Self::Z2, Self::Z3, Self::XY, Self::XY2, Self::XY3, Self::XZ, Self::XZ2, Self::XZ3, Self::X2Y, Self::X2Y3, Self::X2Z, Self::X2Z3, Self::X3Y, Self::X3Y3, Self::X3Z, Self::X3Z3];
+    pub const VARIANTS: [Rotation; 24] = [Self::Neutral, Self::X, Self::X2, Self::X3, Self::Y, Self::Y2, Self::Y3, Self::Z, Self::Z2, Self::Z3, Self::XY, Self::XY2, Self::XY3, Self::XZ, Self::XZ2, Self::XZ3, Self::X2Y, Self::X2Y3, Self::X2Z, Self::X2Z3, Self::X3Y, Self::X3Y3, Self::X3Z, Self::X3Z3];
     /// This is a misnomer. "Generators" in this case is any rotation operand that can be caused by
-    /// the action on a Rubiks' cube.
+    /// an action on a Rubiks' cube.
     pub const GENERATORS: [Rotation; 9] = [Self::X, Self::X2, Self::X3, Self::Y, Self::Y2, Self::Y3, Self::Z, Self::Z2, Self::Z3];
 
     #[inline]
@@ -184,8 +119,183 @@ impl Rotation {
         unsafe { std::mem::transmute::<Self, u8>(self) as usize }
     }
 
-    /// Number of Rubiks' cube actions it would take to get from Neutral to that rotation
-    /// This is too simple for the edge cubelets
+    const fn simple_rotation(left: Self, axis: Axis, turns: u8) -> Self {
+        if turns == 0 { left } else {
+            let new = match (left, axis) {
+                (Self::Neutral, Axis::X) => Self::X,
+                (Self::X,    Axis::X) => Self::X2,
+                (Self::X2,   Axis::X) => Self::X3,
+                (Self::X3,   Axis::X) => Self::Neutral,
+                (Self::Y,    Axis::X) => Self::XZ,
+                (Self::Y2,   Axis::X) => Self::XZ2,
+                (Self::Y3,   Axis::X) => Self::XZ3,
+                (Self::Z,    Axis::X) => Self::XY3,
+                (Self::Z2,   Axis::X) => Self::XY2,
+                (Self::Z3,   Axis::X) => Self::XY,
+                (Self::XY,   Axis::X) => Self::X2Z,
+                (Self::XY2,  Axis::X) => Self::Y2,
+                (Self::XY3,  Axis::X) => Self::X2Z3,
+                (Self::XZ,   Axis::X) => Self::X2Y3,
+                (Self::XZ2,  Axis::X) => Self::Z2,
+                (Self::XZ3,  Axis::X) => Self::X2Y,
+                (Self::X2Y,  Axis::X) => Self::X3Z,
+                (Self::X2Y3, Axis::X) => Self::X3Z3,
+                (Self::X2Z,  Axis::X) => Self::X3Y3,
+                (Self::X2Z3, Axis::X) => Self::X3Y,
+                (Self::X3Y,  Axis::X) => Self::Z,
+                (Self::X3Y3, Axis::X) => Self::Z3,
+                (Self::X3Z,  Axis::X) => Self::Y3,
+                (Self::X3Z3, Axis::X) => Self::Y,
+
+                (Self::Neutral, Axis::Y) => Self::Y,
+                (Self::X,    Axis::Y) => Self::XY,
+                (Self::X2,   Axis::Y) => Self::X2Y,
+                (Self::X3,   Axis::Y) => Self::X3Y,
+                (Self::Y,    Axis::Y) => Self::Y2,
+                (Self::Y2,   Axis::Y) => Self::Y3,
+                (Self::Y3,   Axis::Y) => Self::Neutral,
+                (Self::Z,    Axis::Y) => Self::XZ,
+                (Self::Z2,   Axis::Y) => Self::X2Y3,
+                (Self::Z3,   Axis::Y) => Self::X3Z3,
+                (Self::XY,   Axis::Y) => Self::XY2,
+                (Self::XY2,  Axis::Y) => Self::XY3,
+                (Self::XY3,  Axis::Y) => Self::X,
+                (Self::XZ,   Axis::Y) => Self::X2Z,
+                (Self::XZ2,  Axis::Y) => Self::X3Y3,
+                (Self::XZ3,  Axis::Y) => Self::Z3,
+                (Self::X2Y,  Axis::Y) => Self::Z2,
+                (Self::X2Y3, Axis::Y) => Self::X2,
+                (Self::X2Z,  Axis::Y) => Self::X3Z,
+                (Self::X2Z3, Axis::Y) => Self::XZ3,
+                (Self::X3Y,  Axis::Y) => Self::XZ2,
+                (Self::X3Y3, Axis::Y) => Self::X3,
+                (Self::X3Z,  Axis::Y) => Self::Z,
+                (Self::X3Z3, Axis::Y) => Self::X2Z3,
+
+                (Self::Neutral, Axis::Z) => Self::Z,
+                (Self::X,    Axis::Z) => Self::XZ,
+                (Self::X2,   Axis::Z) => Self::X2Z,
+                (Self::X3,   Axis::Z) => Self::X3Z,
+                (Self::Y,    Axis::Z) => Self::X3Y,
+                (Self::Y2,   Axis::Z) => Self::X2Z3,
+                (Self::Y3,   Axis::Z) => Self::XY3,
+                (Self::Z,    Axis::Z) => Self::Z2,
+                (Self::Z2,   Axis::Z) => Self::Z3,
+                (Self::Z3,   Axis::Z) => Self::Neutral,
+                (Self::XY,   Axis::Z) => Self::Y,
+                (Self::XY2,  Axis::Z) => Self::X3Z3,
+                (Self::XY3,  Axis::Z) => Self::X2Y3,
+                (Self::XZ,   Axis::Z) => Self::XZ2,
+                (Self::XZ2,  Axis::Z) => Self::XZ3,
+                (Self::XZ3,  Axis::Z) => Self::X,
+                (Self::X2Y,  Axis::Z) => Self::XY,
+                (Self::X2Y3, Axis::Z) => Self::X3Y3,
+                (Self::X2Z,  Axis::Z) => Self::Y2,
+                (Self::X2Z3, Axis::Z) => Self::X2,
+                (Self::X3Y,  Axis::Z) => Self::X2Y,
+                (Self::X3Y3, Axis::Z) => Self::Y3,
+                (Self::X3Z,  Axis::Z) => Self::XY2,
+                (Self::X3Z3, Axis::Z) => Self::X3,
+            };
+
+            Self::simple_rotation(new, axis, turns - 1)
+        }
+    }
+
+    const fn into_parts(self) -> [(Axis, u8); 2] {
+        match self {
+            Self::Neutral => [(Axis::X, 0), (Axis::X, 0)],
+            Self::X => [(Axis::X, 1), (Axis::X, 0)],
+            Self::X2 => [(Axis::X, 2), (Axis::X, 0)],
+            Self::X3 => [(Axis::X, 3), (Axis::X, 0)],
+            Self::Y => [(Axis::Y, 1), (Axis::Y, 0)],
+            Self::Y2 => [(Axis::Y, 2), (Axis::Y, 0)],
+            Self::Y3 => [(Axis::Y, 3), (Axis::Y, 0)],
+            Self::Z => [(Axis::Z, 1), (Axis::Z, 0)],
+            Self::Z2 => [(Axis::Z, 2), (Axis::Z, 0)],
+            Self::Z3 => [(Axis::Z, 3), (Axis::Z, 0)],
+            Self::XY => [(Axis::X, 1), (Axis::Y, 1)],
+            Self::XY2 => [(Axis::X, 1), (Axis::Y, 2)],
+            Self::XY3 => [(Axis::X, 1), (Axis::Y, 3)],
+            Self::XZ => [(Axis::X, 1), (Axis::Z, 1)],
+            Self::XZ2 => [(Axis::X, 1), (Axis::Z, 2)],
+            Self::XZ3 => [(Axis::X, 1), (Axis::Z, 3)],
+            Self::X2Y => [(Axis::X, 2), (Axis::Y, 1)],
+            Self::X2Y3 => [(Axis::X, 2), (Axis::Y, 3)],
+            Self::X2Z => [(Axis::X, 2), (Axis::Z, 1)],
+            Self::X2Z3 => [(Axis::X, 2), (Axis::Z, 3)],
+            Self::X3Y => [(Axis::X, 3), (Axis::Y, 1)],
+            Self::X3Y3 => [(Axis::X, 3), (Axis::Y, 3)],
+            Self::X3Z => [(Axis::X, 3), (Axis::Z, 1)],
+            Self::X3Z3 => [(Axis::X, 3), (Axis::Z, 3)],
+        }
+    }
+
+    const MULT_TABLE: [[Self; 24]; 24] = {
+        let mut i = 0;
+        let mut table = [[Self::Neutral; 24]; 24];
+
+        while i < 24 {
+            let left = Self::VARIANTS[i];
+            let mut j = 0;
+
+            while j < 24 {
+                let mut new = left;
+                let right = Self::VARIANTS[j].into_parts();
+
+                let (axis, turns) = right[0];
+                new = Self::simple_rotation(new, axis, turns);
+                let (axis, turns) = right[1];
+                new = Self::simple_rotation(new, axis, turns);
+
+                table[i][j] = new;
+                j += 1;
+            }
+
+            i += 1;
+        }
+
+        table
+    };
+
+    pub const fn compose(self, other: Self) -> Self {
+        Self::MULT_TABLE[self.into_usize()][other.into_usize()]
+    }
+
+    const INVERSES: [Self; 24] = {
+        let mut i = 0;
+        let mut arr = [Self::Neutral; 24];
+        while i < 24 {
+            let a = Self::VARIANTS[i];
+            let mut j = 0;
+
+            while j < 24 {
+                match a.compose(Self::VARIANTS[j]) {
+                    Self::Neutral => {
+                        arr[i] = Self::VARIANTS[j];
+                        break;
+                    }
+                    _ => {}
+                }
+                j += 24;
+            }
+
+            i += 1;
+        }
+
+        arr
+    };
+
+    pub const fn inverse(self) -> Self {
+        Self::INVERSES[self.into_usize()]
+    }
+
+    // const DIFFERENCES: [[Rotation; 24]; 24] = {
+    // };
+
+    /// Number of Rubiks' cube actions it would take to get from Neutral to that rotation.
+    /// TODO: This is too simple for the edge cubelets for which we would need to know position and
+    /// not just rotation.
     pub const fn len(&self) -> u8 {
         match self {
             Self::Neutral => 0,
@@ -194,25 +304,15 @@ impl Rotation {
         }
     }
 
-    /// Compose two rotations
-    pub fn compose(self, other: Rotation) -> Self {
-        ROTATION_GRID[self.into_usize()][other.into_usize()]
-    }
-
-    /// Look up a rotation's inverse
-    pub fn inverse(self) -> Self {
-        INVERSES[self.into_usize()]
-    }
-
-    /// Find the rotation that when right-multiplied with the left operand,
-    /// you obtain the right operand.
-    /// "How to get from rotation A to rotation B?"
-    /// A * x = B
-    /// x = A^-1 * B
-    /// These have been precomputed now
-    pub fn difference(self, other: Rotation) -> Self {
-        DIFFERENCES[self.into_usize()][other.into_usize()]
-    }
+    // /// Find the rotation that when right-multiplied with the left operand,
+    // /// you obtain the right operand.
+    // /// "How to get from rotation A to rotation B?"
+    // /// A * x = B
+    // /// x = A^-1 * B
+    // /// These have been precomputed now
+    // pub fn difference(self, other: Rotation) -> Self {
+    //     todo!()
+    // }
 
     /// Find the rotation of a cube from two facelets
     /// TODO: Assert that the facelets cannot be poles
