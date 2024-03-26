@@ -3,16 +3,16 @@
 
 use std::{
     borrow::BorrowMut,
-    collections::HashMap
+    collections::HashMap,
+    io::Write
 };
-use std::io::Write;
 
 use rubiks::{
     cube::{Cube, Move, Info, index},
     cubelet::{Cubelet, Rotation, Axis},
+    graph::CubeGraph,
     view::DisplayCube
 };
-use rubiks::graph::CubeGraph;
 
 const END: u8 = 5;
 
@@ -27,8 +27,8 @@ fn main() -> Result<(), std::io::Error> {
     let mut graph = CubeGraph::new();
 
     // depth-first search
-    dfs(&mut graph, Cube::default(), None, 0, END);
-    graph.save("depth5.txt")?;
+    bfs(&mut graph, Cube::default(), None, 0, END);
+    graph.save_info("depth5.info")?;
 
     let mut summary: HashMap<u8, (usize, usize)> = HashMap::new();
     for info in graph.graph.node_weights() {
@@ -46,7 +46,7 @@ fn main() -> Result<(), std::io::Error> {
     Ok(())
 }
 
-fn dfs(
+fn bfs(
     graph: &mut CubeGraph,
     cube: Cube,
     last_move: Option<Move>,
@@ -70,7 +70,7 @@ fn dfs(
 
             graph.add_cube(cube.clone(), new.clone(), info, m);
 
-            dfs(graph, new, Some(m), new_depth, max_depth);
+            bfs(graph, new, Some(m), new_depth, max_depth);
         }
     }
 }

@@ -1,4 +1,9 @@
-use std::{fs::File, io::{self, BufRead, BufReader, BufWriter, Write}, str::FromStr, collections::HashMap};
+use std::{
+    fs::File,
+    io::{self, BufRead, BufReader, BufWriter, Write},
+    str::FromStr,
+    collections::HashMap,
+};
 
 use petgraph::{prelude::*, stable_graph::DefaultIx};
 
@@ -86,6 +91,19 @@ impl CubeGraph {
                 let dest = src.clone().make_move(*m);
                 writer.write(format!("{} {} {}\n", src, dest, m).as_bytes())?;
             }
+        }
+
+        writer.flush()?;
+        Ok(())
+    }
+
+    pub fn save_info(&self, file_path: &str) -> Result<(), std::io::Error> {
+        let mut writer = BufWriter::with_capacity(CHUNK_SIZE, File::create(file_path)?);
+
+        // Nodes
+        for ind in self.indices.values() {
+            let info = self.graph.node_weight(*ind).unwrap();
+            writer.write(&[info.depth, info.parity])?;
         }
 
         writer.flush()?;
