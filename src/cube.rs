@@ -38,6 +38,8 @@ impl IntoIterator for Cube {
     }
 }
 
+// Info that can be gleaned from a cube and possibly used as features.
+// The `Info` struct should have a smaller size than a `Cube`.
 #[derive(Debug)]
 pub struct Info {
     pub depth: u8,
@@ -317,6 +319,15 @@ impl Cube {
 
     pub fn parity(&self) -> u8 {
         self.cubelets.iter().map(|r| r.len()).sum()
+    }
+
+    pub fn as_bytes(&self) -> &[u8] {
+        let ptr = self.cubelets.as_slice().as_ptr().cast::<u8>();
+        unsafe { std::ptr::slice_from_raw_parts(ptr, 20).as_ref().unwrap() }
+    }
+
+    pub fn info(&self) -> Info {
+        todo!()
     }
 }
 
