@@ -10,8 +10,13 @@ use std::{
 use rubiks::{
     cube::{Cube, Move, Info, index},
     cubelet::{Cubelet, Rotation, Axis},
+<<<<<<< Updated upstream
     graph::CubeGraph,
     view::DisplayCube
+=======
+    store::CubeStore,
+    view::DisplayCube,
+>>>>>>> Stashed changes
 };
 
 const END: u8 = 5;
@@ -24,11 +29,17 @@ fn main() -> Result<(), std::io::Error> {
     println!("{}", &my_cube);
     println!("{}", DisplayCube(my_cube));
 
-    let mut graph = CubeGraph::new();
+    let mut store = CubeStore::with_capacity(37_000_000);
 
+<<<<<<< Updated upstream
     // depth-first search
     bfs(&mut graph, Cube::default(), None, 0, END);
     graph.save_info("depth5.info")?;
+=======
+    // breadth-first search
+    bfs(&mut store, Cube::default(), None, 0, END);
+    graph.save("depth5.txt")?;
+>>>>>>> Stashed changes
 
     let mut summary: HashMap<u8, (usize, usize)> = HashMap::new();
     for info in graph.graph.node_weights() {
@@ -47,7 +58,11 @@ fn main() -> Result<(), std::io::Error> {
 }
 
 fn bfs(
+<<<<<<< Updated upstream
     graph: &mut CubeGraph,
+=======
+    db: &mut CubeBase,
+>>>>>>> Stashed changes
     cube: Cube,
     last_move: Option<Move>,
     depth: u8,
