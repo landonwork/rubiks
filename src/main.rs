@@ -17,61 +17,76 @@ use rubiks::{
 const END: u8 = 5;
 
 fn main() -> Result<(), std::io::Error> {
-    let my_cube = Cube::default()
-        .make_move(Move(0, 1, Axis::X))
-        .make_move(Move(0, 1, Axis::Y))
-        .make_move(Move(0, 1, Axis::Z));
-    println!("{}", &my_cube);
-    println!("{}", DisplayCube(my_cube));
+    // let my_cube = Cube::default()
+    //     .make_move(Move(0, 1, Axis::X))
+    //     .make_move(Move(0, 1, Axis::Y))
+    //     .make_move(Move(0, 1, Axis::Z));
+    // println!("{}", &my_cube);
+    // println!("{}", DisplayCube(my_cube));
 
-    let mut graph = CubeGraph::new();
+    // let mut graph = CubeGraph::new();
 
-    // depth-first search
-    bfs(&mut graph, Cube::default(), None, 0, END);
-    graph.save_info("depth5.info")?;
+    let strategy = BasicStrategy { last_move: None, search_depth: 5 };
+    let cubes = strategy.explore([Cube::default()].as_slice());
+    let mut cubes_map = HashMap::with_capacity(cubes.len() + 1);
+    cubes_map.insert(Cube::default(), 0);
+    cubes.into_iter()
+        .for_each(|(cube, depth)| match cubes_map.get_mut(&cube) {
+            None => { cubes_map.insert(cube, depth); }
+            Some(depth_mut) => { *depth_mut = std::cmp::min(depth, *depth_mut); }
+        });
 
-    let mut summary: HashMap<u8, (usize, usize)> = HashMap::new();
-    for info in graph.graph.node_weights() {
-        let Info { parity, depth } = info;
-        let val = summary.entry(*depth).or_insert((0, 0));
-        val.0 += 1;
-        val.1 += *parity as usize;
+    let mut summary: HashMap<u8, usize> = HashMap::new();
+    for depth in cubes_map.values() {
+        let val = summary.entry(*depth).or_insert(0);
+        *val += 1;
     }
 
-    println!("Size of Cube: {} bytes", std::mem::size_of::<Cube>());
+    // println!("Size of Cube: {} bytes", std::mem::size_of::<Cube>());
     for (k, v) in summary {
-        println!("{}: Cubes={}, Avg. parity={}", k, v.0, v.1 as f32 / v.0 as f32);
+        println!("{}: Cubes={}", k, v);
     }
 
     Ok(())
 }
 
-fn bfs(
-    graph: &mut CubeGraph,
-    cube: Cube,
+pub trait Strategy {
+    fn explore(&self, to_explore: &[Cube]) -> Vec<(Cube, u8)>;
+}
+
+struct BasicStrategy {
+    pub search_depth: u8,
+    pub last_move: Option<Move>,
+}
+
+fn basic_explore(
+    cube: &Cube,
     last_move: Option<Move>,
     depth: u8,
-    max_depth: u8
-) {
-    if depth < max_depth {
-        let iter: Box<dyn Iterator<Item=Move>> = match last_move {
+    max_depth: u8,
+) -> Vec<(Cube, u8)> {
+    // if depth == max_depth { vec![(cube.clone(), depth)] } else {
+    if depth == max_depth { vec![] } else {
+        let moves: Box<dyn Iterator<Item=Move>> = match last_move {
+            None => Box::new(Move::ALL.into_iter()),
             Some(Move(_, _, Axis::X)) => Box::new(Move::Y.into_iter().chain(Move::Z.into_iter())),
             Some(Move(_, _, Axis::Y)) => Box::new(Move::X.into_iter().chain(Move::Z.into_iter())),
             Some(Move(_, _, Axis::Z)) => Box::new(Move::X.into_iter().chain(Move::Y.into_iter())),
-            None => Box::new(Move::ALL.into_iter()),
         };
-        let new_depth = depth + 1;
-        for m in iter {
-            let new = cube.clone().make_move(m);
-            let info = Info {
-                depth: new_depth,
-                parity: new.parity()
-            };
 
-            graph.add_cube(cube.clone(), new.clone(), info, m);
-
-            bfs(graph, new, Some(m), new_depth, max_depth);
-        }
+        moves.flat_map(|m| {
+                let mut new_cubes = vec![(cube.clone().make_move(m), depth + 1)];
+                new_cubes.extend(basic_explore(&new_cubes[0].0, Some(m), depth + 1, max_depth));
+                new_cubes
+            })
+            .collect()
     }
 }
 
+impl Strategy for BasicStrategy {
+    fn explore(&self, to_explore: &[Cube]) -> Vec<(Cube, u8)> {
+        to_explore.iter()
+            .flat_map(|cube| basic_explore(cube, self.last_move, 0, self.search_depth))
+            .collect()
+    }
+}
