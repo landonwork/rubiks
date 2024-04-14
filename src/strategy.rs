@@ -5,7 +5,6 @@
 use std::{
     thread::{JoinHandle, self},
     sync::mpsc,
-    collections::HashMap,
 };
 
 use crate::{
@@ -64,6 +63,82 @@ impl Strategy for Tree {
                 }
             }
         });
+    }
+}
+
+// Thread pool, because scope was being incredibly slow
+struct ThreadPool<T> {
+    threads: Vec<Option<JoinHandle<T>>>
+}
+
+impl<T: Send> ThreadPool<T> {
+    fn new() -> Self {
+        let num_cpus = thread::available_parallelism().unwrap().get();
+        let mut threads = (0..num_cpus).map(|_| None).collect();
+        Self { threads }
+    }
+
+    fn spawn_all(&mut self, mut spawner: impl Iterator<Item=Box<dyn Send + FnOnce() -> T>>) -> Vec<T> {
+        let mut results = Vec::new();
+        let mut spawner = spawner.peekable();
+
+        'outer: loop {
+            if spawner.peek().is_some() {
+                for i in 0..self.threads.len() {
+                    match self.threads[i] {
+                        None => {
+                            let closure = spawner.next().unwrap();
+                            let parent_handle = thread::current();
+
+                            let handle = thread::spawn(move || {
+                                let result = closure();
+                                parent_handle.unpark();
+                                result
+                            });
+                            self.threads[i] = Some(handle);
+
+                            continue 'outer
+                        }
+                        Some(handle) if handle.is_finished() => {
+                            results.push(handle.join().unwrap());
+
+                            let closure = spawner.next().unwrap();
+                            let parent_handle = thread::current();
+
+                            let handle = thread::spawn(move || {
+                                let result = closure();
+                                parent_handle.unpark();
+                                result
+                            });
+                            self.threads[i] = Some(handle);
+
+                            continue 'outer
+                        }
+                        _ => {}
+                    }
+                }
+            } else {
+                let mut finished = 0;
+                for i in 0..self.threads.len() {
+                    match self.threads[i] {
+                        None => { finished += 1; }
+                        Some(handle) if handle.is_finished() => {
+                            results.push(handle.join().unwrap());
+                            self.threads[i] = None;
+                            finished += 1;
+                        }
+                        _ => {}
+                    }
+                }
+                if finished == self.threads.len() {
+                    break 'outer
+                }
+            }
+
+            thread::park();
+        }
+
+        results
     }
 }
 
