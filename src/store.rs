@@ -1,143 +1,126 @@
 use std::{
+    fs,
     collections::HashMap,
-    fs::File,
     io::{self, BufReader, BufWriter, Read, Write},
-    str::FromStr,
+    ops::{Deref, DerefMut},
+    os::windows::fs::MetadataExt,
 };
 
-use crate::cube::{Cube, Move};
+use dashmap::DashMap;
 
-const CHUNK_SIZE: usize = 8192;
-// const MAX_LINE_LENGTH: usize = 45;
+use crate::{
+    cube::Cube,
+    strategy::{Update, Strategy}
+};
 
-pub trait Strategy {
-    fn next_moves(&self) -> Box<dyn Iterator<Item = Move>>;
-    fn descend(&mut self, m: Move);
-    fn ascend(&mut self);
+// `DepthMap` would probably be more accurate
+#[derive(Clone)]
+pub struct Store(pub HashMap<Cube, u8>);
+
+impl Deref for Store {
+    type Target = HashMap<Cube, u8>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
 }
 
-// Changing to simpler data structure to save space.
-// The graph edges are too much and I can't think of a reason they would be useful,
-// but I will try to keep track of how many neighbors have been visited.
-// key: cube state, value: depth
-pub struct CubeStore(HashMap<Cube, u8>);
+impl DerefMut for Store {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.0
+    }
+}
 
-impl CubeStore {
+impl Store {
+    pub fn new() -> Self {
+        let map = HashMap::from([(Cube::default(), 0)]);
+        Self(map)
+    }
+
     pub fn with_capacity(cap: usize) -> Self {
-        let mut hashmap = HashMap::with_capacity(cap);
-        hashmap.insert(Cube::default(), 0);
-        CubeStore(hashmap)
+        let mut map = HashMap::with_capacity(cap);
+        map.insert(Cube::default(), 0);
+        Self(map)
     }
 
-    /// Add a new, unexplored cube to the store and update its info if it already exists.
-    pub fn new_cube(&mut self, cube: Cube, depth: u8) {
-        self.0
-            .entry(cube)
-            .and_modify(|d| { *d = std::cmp::min(*d, depth); })
-            .or_insert(depth);
+    pub fn expand(&mut self, strategy: impl Strategy, criteria: Vec<Box<dyn Fn(&Cube, u8) -> bool>>) {
+        let cubes: Vec<_> = self.iter()
+            .filter_map(|(cube, &depth)| criteria.iter().all(|crit| crit(cube, depth)).then_some(cube.clone()))
+            .collect();
+        let closure = |cube| strategy.explore(self, &cube);
+        cubes.into_iter().for_each(closure);
     }
 
-    // Explore all neighbors of an existing node
-    pub fn explore_node<S: Strategy>(&self, cube: &Cube, strat: &S) -> Vec<Cube> {
-        debug_assert!(self.0.contains_key(cube));
-
-        let mut cubes = Vec::with_capacity(45);
-        cubes.extend(strat.next_moves().map(|m| cube.clone().make_move(m)));
-        cubes
+    pub fn extend_from_store(&mut self, other: Store) {
+        let mut cubes_to_update = Vec::new();
+        other.0.into_iter()
+            .for_each(|(cube, depth)| {
+                self.entry(cube.clone())
+                    .and_modify(|depth_mut_ref| {
+                        if depth < *depth_mut_ref {
+                            *depth_mut_ref = depth;
+                            cubes_to_update.push(cube);
+                        }
+                    })
+                    .or_insert(depth);
+            });
+        cubes_to_update.into_iter().for_each(|cube| Update.explore(self, &cube));
     }
 
-    pub fn explore<S: Strategy>(&mut self, strat: &mut S) {
-    }
+    pub fn load(file_name: &str) -> io::Result<Self> {
+        let file = fs::File::open(file_name)?;
+        let size = file.metadata()?.file_size();
+        let mut reader = BufReader::new(file);
+        let mut buffer: [u8; 21] = [0; 21];
+        let mut store = HashMap::with_capacity(size as usize / 21);
 
-    ///////// I/O /////////
-
-    pub fn load(file_path: &str) -> Result<Self, std::io::Error> {
-        let mut reader = BufReader::with_capacity(CHUNK_SIZE, File::open(file_path).unwrap());
-        let mut store = CubeStore::with_capacity(file_path.len() / 23);
-        let mut buf = [0u8; 21];
-
-        // TODO: Check and see if it is the correct error when it terminates
-        // (`ErrorKind::UnexpectedEof`)
         loop {
-            match reader.read_exact(&mut buf) {
-                Ok(_) => {
-                    let cube: Cube = std::str::from_utf8(&buf[..20])
-                        .map_err(|_| io::Error::new(io::ErrorKind::InvalidData, ""))?
-                        .parse()?;
-                    let depth = buf[20];
-                    store.0.insert(cube, depth);
+            match reader.read_exact(&mut buffer) {
+                Ok(()) => {
+                    let cubelets: [u8; 20] = buffer[..20].try_into().unwrap();
+                    let cube = Cube { cubelets: unsafe { std::mem::transmute(cubelets) } };
+                    store.insert(cube, buffer[20]);
                 }
-                Err(e) if matches!(e.kind(), io::ErrorKind::UnexpectedEof) => { break; }
-                error @ Err(_) => { error?; }
+                Err(error) if matches!(error.kind(), io::ErrorKind::UnexpectedEof) => {
+                    break
+                }
+                error => { error?; }
             }
         }
 
-        Ok(store)
+        Ok(Store(store))
     }
 
-    pub fn save(&self, file_path: &str) -> Result<(), std::io::Error> {
-        let mut writer = BufWriter::with_capacity(CHUNK_SIZE, File::create(file_path)?);
-
-        for (cube, depth) in self.0.iter() {
-            writer.write(cube.as_bytes())?;
-            writer.write(&[*depth])?;
+    pub fn save(&self, file_name: &str) -> io::Result<()> {
+        let file = fs::File::create(file_name)?;
+        let mut writer = BufWriter::new(file);
+        for (k, v) in self.iter() {
+            writer.write_all(k.as_bytes())?;
+            writer.write_all([*v].as_slice())?;
         }
-
         writer.flush()?;
         Ok(())
     }
-
-    // pub fn save_info(&self, file_path: &str) -> Result<(), std::io::Error> {
-    //     let mut writer = BufWriter::with_capacity(CHUNK_SIZE, File::create(file_path)?);
-
-    //     for (cube, depth) in self.0.iter() {
-    //         let info = cube.info();
-    //         writer.write(info.as_bytes())?;
-    //         writer.write(&[*depth])?;
-    //     }
-
-    //     writer.flush()?;
-    //     Ok(())
-    // }
 }
 
-enum Line {
-    Node(Cube, u8, u8),
-    Edge(Cube, Cube, Move)
-}
+// A `Store`, but for sharing across multiple threads
+pub struct MultiStore(DashMap<Cube, u8>);
 
-impl FromStr for Line {
-    type Err = io::Error;
+impl Deref for MultiStore {
+    type Target = DashMap<Cube, u8>;
 
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        match s.len() {
-            // Range to account for the 1- to 2-digit numbers
-            24..=27 => {
-                let parts: [&str; 3] = s
-                    .split_whitespace()
-                    .collect::<Vec<_>>()
-                    .try_into()
-                    .map_err(|_| io::Error::new(io::ErrorKind::InvalidData, s))?;
-                let node = Line::Node(
-                    parts[0].trim().parse()?, 
-                    parts[1].trim().parse().map_err(|_| io::Error::new(io::ErrorKind::InvalidData, s))?, 
-                    parts[2].trim().parse().map_err(|_| io::Error::new(io::ErrorKind::InvalidData, s))?
-                );
-
-                Ok(node)
-            }
-            // Range to account for the possible absence of a new line character
-            45..=46 => {
-                let parts: [&str; 3] = s
-                    .split_whitespace()
-                    .collect::<Vec<_>>()
-                    .try_into()
-                    .map_err(|_| io::Error::new(io::ErrorKind::InvalidData, s))?;
-                let edge = Line::Edge(parts[0].parse()?, parts[1].parse()?, parts[2].trim_end().parse()?);
-                Ok(edge)
-            }
-            _ => { Err(io::Error::new(io::ErrorKind::InvalidData, s)) }
-        }
+    fn deref(&self) -> &Self::Target {
+        &self.0
     }
 }
 
+// Something with an index; maybe it could be parallelized and use swap memory;
+// maybe a wrapper on a database, like Redis, which gets backed up automatically?
+// pub struct Table {
+//     
+// }
+
+// Cubes mapped to its depth and the best move towards the solved state
+// pub struct BackwardTrie {
+//     inner: HashMap<Cube, (u8, Move)>
+// }

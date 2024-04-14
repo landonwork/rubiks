@@ -1,4 +1,9 @@
 /target
+/test
 Cargo.lock
 *.txt
 .ipynb_checkpoints
+
+# data files
+*.store
+*.info
