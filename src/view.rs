@@ -1,7 +1,7 @@
 // I want to put wrappers here that will change the way different things are formatted to strings
-use std::{fmt::Display, io, str::FromStr};
+use std::fmt::Display;
 
-use crate::{cube::{Move, Cube, index}, cubelet::Rotation};
+use crate::cube::{Move, Cube, index};
 
 pub struct MovesList<'a>(pub &'a [Move]);
 
@@ -55,24 +55,6 @@ impl Display for DisplayCube {
     }
 }
 
-
-impl FromStr for Cube {
-    type Err = io::Error;
-
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        if s.len() == 20 {
-            let chars: [u8; 20] = s.as_bytes().try_into().unwrap();
-            let mut cubelets: [Rotation; 20] = Default::default();
-            for (i, b) in chars.into_iter().enumerate() {
-                let val = b - b'A';
-                cubelets[i] = val.try_into().map_err(|_| io::Error::new(io::ErrorKind::InvalidData, s))?;
-            }
-            Ok(Cube { cubelets })
-        } else {
-            Err(io::Error::new(io::ErrorKind::InvalidData, s))
-        }
-    }
-}
 
 // pub fn pad_outside(mut this: String, num: u8) -> String {
 //     let mut s = " ".repeat(num as usize);

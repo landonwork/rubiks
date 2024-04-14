@@ -5,7 +5,7 @@
 use std::fmt::Display;
 
 #[repr(u8)]
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum Axis { X, Y, Z, }
 
 impl Display for Axis {

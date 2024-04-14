@@ -11,15 +11,12 @@ path = "src/lib.rs"
 name = "cubix"
 path = "src/bin/cubix.rs"
 
-[[bin]]
-name = "build_graph"
-path = "src/bin/build_graph.rs"
-
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
 clap = { version = "4.5.3", features = ["derive"] }
 crossterm = "0.27.0"
-petgraph = "0.6.4"
+dashmap = "5.5.3"
+num = "0.4.1"
 rand = "0.8.5"
 ratatui = "0.26.1"
