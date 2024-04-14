@@ -20,7 +20,7 @@ use rubiks::{
 #[derive(Parser)]
 #[command(version, about, long_about = None)]
 struct Args {
-    #[arg(short, long, default_value_t = 1)]
+    #[arg(short, long, default_value_t = 3)]
     depth: u8
 }
 
@@ -34,7 +34,7 @@ fn main() -> Result<(), std::io::Error> {
         search_depth: args.depth,
         jobs: Move::ALL.into_iter().map(|m| vec![m]).collect()
     };
-    let mut store = Store::with_capacity(37_000_000);
+    let mut store = Store::with_capacity(34_000_000);
     store.expand(strategy, vec![]);
 
     let mut summary: HashMap<u8, usize> = HashMap::new();

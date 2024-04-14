@@ -4,7 +4,7 @@
 
 use std::{
     thread::{JoinHandle, self},
-    sync::mpsc,
+    collections::HashMap
 };
 
 use crate::{
@@ -71,21 +71,21 @@ struct ThreadPool<T> {
     threads: Vec<Option<JoinHandle<T>>>
 }
 
-impl<T: Send> ThreadPool<T> {
+impl<T: Send + 'static> ThreadPool<T> {
     fn new() -> Self {
         let num_cpus = thread::available_parallelism().unwrap().get();
-        let mut threads = (0..num_cpus).map(|_| None).collect();
+        let threads = (0..num_cpus).map(|_| None).collect();
         Self { threads }
     }
 
-    fn spawn_all(&mut self, mut spawner: impl Iterator<Item=Box<dyn Send + FnOnce() -> T>>) -> Vec<T> {
+    fn spawn_all(&mut self, spawner: impl Iterator<Item=Box<dyn Send + FnOnce() -> T>>) -> Vec<T> {
         let mut results = Vec::new();
         let mut spawner = spawner.peekable();
 
         'outer: loop {
             if spawner.peek().is_some() {
                 for i in 0..self.threads.len() {
-                    match self.threads[i] {
+                    match &self.threads[i] {
                         None => {
                             let closure = spawner.next().unwrap();
                             let parent_handle = thread::current();
@@ -100,8 +100,6 @@ impl<T: Send> ThreadPool<T> {
                             continue 'outer
                         }
                         Some(handle) if handle.is_finished() => {
-                            results.push(handle.join().unwrap());
-
                             let closure = spawner.next().unwrap();
                             let parent_handle = thread::current();
 
@@ -110,7 +108,8 @@ impl<T: Send> ThreadPool<T> {
                                 parent_handle.unpark();
                                 result
                             });
-                            self.threads[i] = Some(handle);
+                            let finished_handle = std::mem::replace(&mut self.threads[i], Some(handle));
+                            results.push(finished_handle.unwrap().join().unwrap());
 
                             continue 'outer
                         }
@@ -120,11 +119,11 @@ impl<T: Send> ThreadPool<T> {
             } else {
                 let mut finished = 0;
                 for i in 0..self.threads.len() {
-                    match self.threads[i] {
+                    match &self.threads[i] {
                         None => { finished += 1; }
                         Some(handle) if handle.is_finished() => {
-                            results.push(handle.join().unwrap());
-                            self.threads[i] = None;
+                            let finished_handle = std::mem::replace(&mut self.threads[i], None);
+                            results.push(finished_handle.unwrap().join().unwrap());
                             finished += 1;
                         }
                         _ => {}
@@ -152,56 +151,43 @@ pub struct MultiTree {
 impl Strategy for MultiTree {
     fn explore(&self, store: &mut Store, cube: &Cube) {
         // Getting things set up
-        let last_moves: Vec<_> = self.jobs.iter().map(|moves| moves.last().clone()).collect();
         let starts: Vec<_> = self.jobs.iter()
-            .map(|moves| moves.into_iter().fold(
-                (cube.clone(), 0),
-                |(acc, d), &m| {
-                    let new = acc.make_move(m);
-                    store.insert(new.clone(), d + 1);
-                    (new, d + 1)
-                }
-            ))
+            .map(|moves| {
+                let last_move = moves.last().clone();
+                let (cube, depth) = moves.into_iter().fold(
+                    (cube.clone(), 0),
+                    |(acc, d), &m| {
+                        let new = acc.make_move(m);
+                        store.insert(new.clone(), d + 1);
+                        (new, d + 1)
+                    });
+                (cube, depth, last_move)
+            })
             .collect();
 
-        let num_cpus = thread::available_parallelism().unwrap().get();
-        let num_jobs = starts.len();
-        let mut pool: Vec<_> = (0..num_cpus).map(|_| None).collect();
-        // Sends are non-blocking; infinitely buffered
-        let (sender, receiver) = mpsc::channel();
 
-        let mut spawner = starts.into_iter();
-        loop {
-            break
-        };
-
-        pool.
         // Spawn all those tasks
-        // pool.scope(|scope| {
-        //     let n_jobs = starts.len();
-        //     for ((start, depth), m) in starts.into_iter().zip(last_moves) {
-        //         let sender = sender.clone();
+        let mut pool = ThreadPool::new();
+        let spawner = starts.into_iter()
+            .map(|(start, depth, last_move)| {
+                let cap = store.capacity() / self.jobs.len();
+                let mut inner = HashMap::with_capacity(cap);
+                inner.extend(store.iter().map(|(a, b)| (a.clone(), b.clone())));
+                let mut local_store = Store(inner);
+                let tree = Tree {
+                    prev_move: last_move.copied(),
+                    current_depth: depth,
+                    search_depth: self.search_depth
+                };
+                let closure: Box<dyn Send + FnOnce() -> Store> = Box::new(move || {
+                    local_store.expand(tree, vec![Box::new(move |cube, _depth| cube == &start)]);
+                    local_store
+                });
+                closure
+            });
+        let stores = pool.spawn_all(spawner);
 
-        //         // Naive guess at how much capacity the store needs based on the original's
-        //         let cap = store.len() / n_jobs;
-        //         let mut hashmap = HashMap::with_capacity(cap);
-        //         hashmap.extend(store.iter().map(|(a, b)| (a.clone(), b.clone())));
-        //         let mut local_store = Store(hashmap);
-
-        //         scope.spawn(move |_scope| {
-        //             let tree = Tree {
-        //                 prev_move: m.copied(),
-        //                 current_depth: depth,
-        //                 search_depth: self.search_depth,
-        //             };
-        //             local_store.expand(tree, vec![Box::new(move |cube, _depth| cube == &start)]);
-        //             let _ = sender.send(local_store);
-        //         });
-        //     }
-        // });
-
-        for (i, other) in receiver.iter().enumerate() {
-            print!("{}", i);
+        for other in stores {
             store.extend_from_store(other);
         }
     }
@@ -369,3 +355,35 @@ impl Strategy for Update {
     }
 }
 
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::time::{Duration, Instant};
+
+    #[test]
+    fn test_pool() {
+        let mut pool = ThreadPool::new();
+        let spawner: Vec<_> = (0..10).map(|i| {
+            let closure: Box<dyn Send + FnOnce() -> u64> = Box::new(
+                move || {
+                    // println!("Going to sleep...");
+                    thread::sleep(Duration::from_secs(i));
+                    // println!("Thread slept for {i} seconds");
+                    i
+                }
+            );
+            closure
+        }).collect();
+
+        let begin = Instant::now();
+        pool.spawn_all(spawner.into_iter());
+        // println!("Done");
+        let duration = Instant::now().duration_since(begin);
+
+        let expected_min = Duration::from_secs(15);
+        assert!(expected_min < duration, "{duration:?}");
+        // drop(pool);
+        // println!("Pool dropped");
+    }
+}
