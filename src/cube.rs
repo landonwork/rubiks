@@ -1,18 +1,18 @@
-use std::{fmt::Display, array, io, str::FromStr};
+use std::{collections::HashSet, fmt::Display, array, io, str::FromStr};
 
 use crate::cubelet::{Axis, Rotation};
 
-// My own way of representing the arrangement of a Rubiks' cube
-// relying on minimum number of moves from the solved arrangement.
+// My own way of representing the state of a Rubiks' cube
+// relying on minimum number of moves from the solved state.
 // Hopefully, we can reduce the search space by using it to easily
-// identify isomorphic arrangements.
+// identify isomorphic states.
 // TODO: This is significantly complicated. I think I will need
 // some sort of adjacency matrix that keeps track of which faces,
 // axes, and directions are distinct at any point in the move
 // sequence.
 
 /// A Rubiks' cube state, represented by the rotation of
-/// the cubelets relative to the solved arrangement. Each cubelet
+/// the cubelets relative to the solved state. Each cubelet
 /// is represented in the place where it is currently. Face centers
 /// and the middle-middle-middle piece are never changed from Rotation::Neutral
 /// This is probably the most practical memory layout.
@@ -38,23 +38,29 @@ impl IntoIterator for Cube {
     }
 }
 
+impl FromStr for Cube {
+    type Err = std::io::Error;
+    fn from_str(value: &str) -> Result<Self, Self::Err> {
+        Ok(Self {
+            cubelets: value.as_bytes()
+                .into_iter()
+                .map(|&b| unsafe { std::mem::transmute(b - b'A') })
+                .collect::<Vec<_>>()
+                .try_into()
+                .map_err(|_| io::Error::new(io::ErrorKind::InvalidData, value.to_owned()))?
+        })
+    }
+}
+
 #[derive(Debug)]
 pub struct Info {
     pub depth: u8,
     pub parity: u8,
 }
 
-// If updating info gets anymore complicated
-// impl Info {
-//     pub fn update(&mut self, other: Info) {
-//         self.depth = std::cmp::min(self.depth, other.depth);
-//     }
-// }
-
-
 /// Number of turns on the most negative face, number of turns on the most positive face,
 /// and the axis on which the turns happen
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub struct Move(pub u8, pub u8, pub Axis);
 
 impl Display for Move {
@@ -110,53 +116,20 @@ impl Move {
         res
     };
 
-    pub const X: [Move; 15] = {
-        let mut i = 0;
-        let mut res = [Move(0, 0, Axis::X); 15];
-        while i < 4 {
-            let mut j = 0;
-            while j < 4 {
-                if !(i == 0 && j == 0) {
-                    res[i*4 + j - 1] = Move(i as u8, j as u8, Axis::X);
-                }
-                j += 1;
-            }
+    const fn axis_moves(axis: Axis) -> [Move; 15] {
+        let mut i = 1;
+        let mut res = [Move(0, 0, axis); 15];
+        while i < 16 {
+            res[i - 1].0 = i as u8 / 4;
+            res[i - 1].1 = i as u8 % 4;
             i += 1;
         }
         res
-    };
+    }
 
-    pub const Y: [Move; 15] = {
-        let mut i = 0;
-        let mut res = [Move(0, 0, Axis::Y); 15];
-        while i < 4 {
-            let mut j = 0;
-            while j < 4 {
-                if !(i == 0 && j == 0) {
-                    res[i*4 + j - 1] = Move(i as u8, j as u8, Axis::Y);
-                }
-                j += 1;
-            }
-            i += 1;
-        }
-        res
-    };
-
-    pub const Z: [Move; 15] = {
-        let mut i = 0;
-        let mut res = [Move(0, 0, Axis::Z); 15];
-        while i < 4 {
-            let mut j = 0;
-            while j < 4 {
-                if !(i == 0 && j == 0) {
-                    res[i*4 + j - 1] = Move(i as u8, j as u8, Axis::Z);
-                }
-                j += 1;
-            }
-            i += 1;
-        }
-        res
-    };
+    pub const X: [Move; 15] = Self::axis_moves(Axis::X);
+    pub const Y: [Move; 15] = Self::axis_moves(Axis::Y);
+    pub const Z: [Move; 15] = Self::axis_moves(Axis::Z);
 
     pub fn inverse(self) -> Self {
         let Move(rot1, rot2, axis) = self;
@@ -318,8 +291,38 @@ impl Cube {
     pub fn parity(&self) -> u8 {
         self.cubelets.iter().map(|r| r.len()).sum()
     }
+
+    pub fn purity(&self) -> f32 {
+        todo!()
+    }
+
+    pub fn entropy(&self) -> f32 {
+        todo!()
+    }
+
+    pub unsafe fn as_bytes(&self) -> &[u8] {
+        let ptr: *const u8 = self.cubelets.as_ptr().cast();
+        std::slice::from_raw_parts(ptr, 20)
+    }
 }
 
+// Add all feasible paths to the Vec `paths`
+pub fn search(paths: &mut HashSet<Vec<Move>>, path: &mut CubePath, target: &Cube, depth: u8, max_depth: u8) {
+    if depth >= max_depth { return }
+
+    for m in Move::ALL {
+        path.make_move(m);
+        if path.last_cube() == target {
+            paths.insert(path.moves.clone());
+        } else {
+            search(paths, path, target, depth + 1, max_depth);
+        }
+        path.make_move(m.inverse());
+    }
+}
+
+
+#[derive(Clone, Debug)]
 pub struct CubePath {
     pub moves: Vec<Move>,
     // cubes is always going to be 1 longer than moves

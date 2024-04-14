@@ -3,90 +3,65 @@
 
 use std::{
     borrow::BorrowMut,
-    collections::HashMap,
+    collections::{HashMap, HashSet},
     io::Write
 };
 
+use clap::Parser;
 use rubiks::{
-    cube::{Cube, Move, Info, index},
+    cube::{Cube, CubePath, Info, Move, index, self},
     cubelet::{Cubelet, Rotation, Axis},
     graph::CubeGraph,
-    view::DisplayCube
+    view::DisplayCube,
+    strategy::{MultiTree, PartialTree, Tree, Strategy, Cycle},
+    store::Store
 };
 
-const END: u8 = 5;
+#[derive(Parser)]
+#[command(version, about, long_about = None)]
+struct Args {
+    #[arg(short, long, default_value_t = 1)]
+    depth: u8
+}
 
 fn main() -> Result<(), std::io::Error> {
-    // let my_cube = Cube::default()
-    //     .make_move(Move(0, 1, Axis::X))
-    //     .make_move(Move(0, 1, Axis::Y))
-    //     .make_move(Move(0, 1, Axis::Z));
-    // println!("{}", &my_cube);
-    // println!("{}", DisplayCube(my_cube));
+    let args = Args::parse();
 
-    // let mut graph = CubeGraph::new();
-
-    let strategy = BasicStrategy { last_move: None, search_depth: 5 };
-    let cubes = strategy.explore([Cube::default()].as_slice());
-    let mut cubes_map = HashMap::with_capacity(cubes.len() + 1);
-    cubes_map.insert(Cube::default(), 0);
-    cubes.into_iter()
-        .for_each(|(cube, depth)| match cubes_map.get_mut(&cube) {
-            None => { cubes_map.insert(cube, depth); }
-            Some(depth_mut) => { *depth_mut = std::cmp::min(depth, *depth_mut); }
-        });
+    // let strategy = Tree { prev_move: None, current_depth: 0, search_depth: args.depth };
+    // let strategy = Cycle { moves: vec![ Move(1, 0, Axis::X), Move(0, 1, Axis::Y) ] };
+    // let strategy = PartialTree { axes: vec![Axis::X, Axis::Y, Axis::X, Axis::Z, Axis::Y], current_depth: 0 };
+    let strategy = MultiTree {
+        search_depth: args.depth,
+        jobs: Move::ALL.into_iter().map(|m| vec![m]).collect()
+    };
+    let mut store = Store::with_capacity(37_000_000);
+    store.expand(strategy, vec![]);
 
     let mut summary: HashMap<u8, usize> = HashMap::new();
-    for depth in cubes_map.values() {
+    for (_cube, depth) in store.iter() {
         let val = summary.entry(*depth).or_insert(0);
         *val += 1;
     }
+    let mut summary: Vec<_> = summary.into_iter().collect();
+    summary.sort();
+    // store.save(&format!("depth_{}.store", args.depth))?;
+    // store.save(&format!("cycle_xy.store"))?;
 
-    // println!("Size of Cube: {} bytes", std::mem::size_of::<Cube>());
     for (k, v) in summary {
         println!("{}: Cubes={}", k, v);
     }
 
+    // let not_in_depth3 = Store::load("test/not_in_depth3.store")?;
+    // let mut search_cube = CubePath::default();
+    // for target_cube in not_in_depth3.keys() {
+    //     println!("\n=========================================================\n{}", DisplayCube(target_cube.clone()));
+    //     let mut paths = HashSet::new();
+    //     cube::search(&mut paths, &mut search_cube, &target_cube, 0, 3);
+    //     for path in paths {
+    //         println!("{:?}", path);
+    //     }
+    // }
+
     Ok(())
 }
 
-pub trait Strategy {
-    fn explore(&self, to_explore: &[Cube]) -> Vec<(Cube, u8)>;
-}
-
-struct BasicStrategy {
-    pub search_depth: u8,
-    pub last_move: Option<Move>,
-}
-
-fn basic_explore(
-    cube: &Cube,
-    last_move: Option<Move>,
-    depth: u8,
-    max_depth: u8,
-) -> Vec<(Cube, u8)> {
-    // if depth == max_depth { vec![(cube.clone(), depth)] } else {
-    if depth == max_depth { vec![] } else {
-        let moves: Box<dyn Iterator<Item=Move>> = match last_move {
-            None => Box::new(Move::ALL.into_iter()),
-            Some(Move(_, _, Axis::X)) => Box::new(Move::Y.into_iter().chain(Move::Z.into_iter())),
-            Some(Move(_, _, Axis::Y)) => Box::new(Move::X.into_iter().chain(Move::Z.into_iter())),
-            Some(Move(_, _, Axis::Z)) => Box::new(Move::X.into_iter().chain(Move::Y.into_iter())),
-        };
-
-        moves.flat_map(|m| {
-                let mut new_cubes = vec![(cube.clone().make_move(m), depth + 1)];
-                new_cubes.extend(basic_explore(&new_cubes[0].0, Some(m), depth + 1, max_depth));
-                new_cubes
-            })
-            .collect()
-    }
-}
-
-impl Strategy for BasicStrategy {
-    fn explore(&self, to_explore: &[Cube]) -> Vec<(Cube, u8)> {
-        to_explore.iter()
-            .flat_map(|cube| basic_explore(cube, self.last_move, 0, self.search_depth))
-            .collect()
-    }
-}
