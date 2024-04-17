@@ -6,8 +6,6 @@ use std::{
     os::windows::fs::MetadataExt,
 };
 
-use dashmap::DashMap;
-
 use crate::{
     cube::Cube,
     strategy::{Update, Strategy}
@@ -103,19 +101,9 @@ impl Store {
     }
 }
 
-// A `Store`, but for sharing across multiple threads
-pub struct MultiStore(DashMap<Cube, u8>);
-
-impl Deref for MultiStore {
-    type Target = DashMap<Cube, u8>;
-
-    fn deref(&self) -> &Self::Target {
-        &self.0
-    }
-}
-
 // Something with an index; maybe it could be parallelized and use swap memory;
 // maybe a wrapper on a database, like Redis, which gets backed up automatically?
+// It would be nice if I didn't have to hold the whole thing in memory at once.
 // pub struct Table {
 //     
 // }

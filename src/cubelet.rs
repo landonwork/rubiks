@@ -202,7 +202,7 @@ impl Rotation {
         }
     }
 
-    const fn into_parts(self) -> [(Axis, u8); 2] {
+    pub const fn into_parts(self) -> [(Axis, u8); 2] {
         match self {
             Self::Neutral => [(Axis::X, 0), (Axis::X, 0)],
             Self::X => [(Axis::X, 1), (Axis::X, 0)],
@@ -290,8 +290,9 @@ impl Rotation {
         Self::INVERSES[self.into_usize()]
     }
 
-    // const DIFFERENCES: [[Rotation; 24]; 24] = {
-    // };
+    pub const fn difference(self, other: Self) -> Self {
+        self.inverse().compose(other)
+    }
 
     /// Number of Rubiks' cube actions it would take to get from Neutral to that rotation.
     /// TODO: This is too simple for the edge cubelets for which we would need to know position and

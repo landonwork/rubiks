@@ -361,15 +361,16 @@ mod tests {
     use super::*;
     use std::time::{Duration, Instant};
 
+    // TODO: I wrote this to work on my personal laptop.
+    // There's a way to write the logic for this for any number of cores,
+    // I'm just not in the mood to figure it out
     #[test]
     fn test_pool() {
         let mut pool = ThreadPool::new();
         let spawner: Vec<_> = (0..10).map(|i| {
             let closure: Box<dyn Send + FnOnce() -> u64> = Box::new(
                 move || {
-                    // println!("Going to sleep...");
                     thread::sleep(Duration::from_secs(i));
-                    // println!("Thread slept for {i} seconds");
                     i
                 }
             );
@@ -378,12 +379,9 @@ mod tests {
 
         let begin = Instant::now();
         pool.spawn_all(spawner.into_iter());
-        // println!("Done");
         let duration = Instant::now().duration_since(begin);
 
         let expected_min = Duration::from_secs(15);
         assert!(expected_min < duration, "{duration:?}");
-        // drop(pool);
-        // println!("Pool dropped");
     }
 }

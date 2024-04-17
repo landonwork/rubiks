@@ -1,4 +1,10 @@
-use std::{collections::HashSet, fmt::Display, array, io, str::FromStr};
+use std::{
+    array, 
+    collections::HashSet, 
+    fmt::Display, 
+    io, 
+    str::FromStr
+};
 
 use crate::cubelet::{Axis, Rotation};
 
@@ -6,10 +12,6 @@ use crate::cubelet::{Axis, Rotation};
 // relying on minimum number of moves from the solved state.
 // Hopefully, we can reduce the search space by using it to easily
 // identify isomorphic states.
-// TODO: This is significantly complicated. I think I will need
-// some sort of adjacency matrix that keeps track of which faces,
-// axes, and directions are distinct at any point in the move
-// sequence.
 
 /// A Rubiks' cube state, represented by the rotation of
 /// the cubelets relative to the solved state. Each cubelet
@@ -139,7 +141,8 @@ impl Move {
     }
 }
 
-pub const fn index<const X: usize, const Y: usize, const Z: usize>() -> usize {
+#[allow(non_snake_case)]
+pub const fn index([X, Y, Z]: [usize; 3]) -> usize {
     assert!(X < 3);
     assert!(Y < 3);
     assert!(Z < 3);
@@ -153,102 +156,144 @@ pub const fn index<const X: usize, const Y: usize, const Z: usize>() -> usize {
     - (X==2 && (Z==2 && Y==1 || Y==2)) as usize
 }
 
+pub const fn coords(index: usize) -> [usize; 3] {
+    const COORDS: [[usize; 3]; 20] = [
+        [0, 0, 0],
+        [0, 0, 1],
+        [0, 0, 2],
+        [0, 1, 0],
+        [0, 1, 2],
+        [0, 2, 0],
+        [0, 2, 1],
+        [0, 2, 2],
+        [1, 0, 0],
+        [1, 0, 2],
+        [1, 2, 0],
+        [1, 2, 2],
+        [2, 0, 0],
+        [2, 0, 1],
+        [2, 0, 2],
+        [2, 1, 0],
+        [2, 1, 2],
+        [2, 2, 0],
+        [2, 2, 1],
+        [2, 2, 2],
+    ];
+    COORDS[index]
+}
+
+#[allow(non_snake_case)]
+const fn shift_coords_simple(coords: [usize; 3], (axis, turns): (Axis, u8)) -> [usize; 3] {
+    let [X, Y, Z] = coords;
+    match (axis, turns) {
+        (_, 0) => coords,
+        (Axis::X, n) => shift_coords_simple([X, Z, 2 - Y], (axis, n - 1)),
+        (Axis::Y, n) => shift_coords_simple([Z, Y, 2 - X], (axis, n - 1)),
+        (Axis::Z, n) => shift_coords_simple([Y, 2 - X, Z], (axis, n - 1)),
+    }
+}
+
+const fn shift_coords(coords: [usize; 3], rot: Rotation) -> [usize; 3] {
+    let [rot1, rot2] = rot.into_parts();
+    shift_coords_simple(shift_coords_simple(coords, rot1), rot2)
+}
+
 fn turn_face_x<const FACE: usize>(cube: Cube, rot: Rotation) -> Cube {
     let mut c = cube.cubelets;
     // corners
-    (c[index::<FACE,2,2>()], c[index::<FACE,0,2>()], c[index::<FACE,0,0>()], c[index::<FACE,2,0>()]) =
-        (c[index::<FACE,2,0>()].compose(rot), c[index::<FACE,2,2>()].compose(rot), c[index::<FACE,0,2>()].compose(rot), c[index::<FACE,0,0>()].compose(rot));
+    (c[index([FACE,2,2])], c[index([FACE,0,2])], c[index([FACE,0,0])], c[index([FACE,2,0])]) =
+        (c[index([FACE,2,0])].compose(rot), c[index([FACE,2,2])].compose(rot), c[index([FACE,0,2])].compose(rot), c[index([FACE,0,0])].compose(rot));
     // edges
-    (c[index::<FACE,1,2>()], c[index::<FACE,0,1>()], c[index::<FACE,1,0>()], c[index::<FACE,2,1>()]) =
-        (c[index::<FACE,2,1>()].compose(rot), c[index::<FACE,1,2>()].compose(rot), c[index::<FACE,0,1>()].compose(rot), c[index::<FACE,1,0>()].compose(rot));
+    (c[index([FACE,1,2])], c[index([FACE,0,1])], c[index([FACE,1,0])], c[index([FACE,2,1])]) =
+        (c[index([FACE,2,1])].compose(rot), c[index([FACE,1,2])].compose(rot), c[index([FACE,0,1])].compose(rot), c[index([FACE,1,0])].compose(rot));
     Cube { cubelets: c }
 }
 
 fn turn_face_x2<const FACE: usize>(cube: Cube, rot: Rotation) -> Cube {
     let mut c = cube.cubelets;
     // corners
-    (c[index::<FACE,2,2>()], c[index::<FACE,0,2>()], c[index::<FACE,0,0>()], c[index::<FACE,2,0>()]) =
-        (c[index::<FACE,0,0>()].compose(rot), c[index::<FACE,2,0>()].compose(rot), c[index::<FACE,2,2>()].compose(rot), c[index::<FACE,0,2>()].compose(rot));
+    (c[index([FACE,2,2])], c[index([FACE,0,2])], c[index([FACE,0,0])], c[index([FACE,2,0])]) =
+        (c[index([FACE,0,0])].compose(rot), c[index([FACE,2,0])].compose(rot), c[index([FACE,2,2])].compose(rot), c[index([FACE,0,2])].compose(rot));
     // edges
-    (c[index::<FACE,1,2>()], c[index::<FACE,0,1>()], c[index::<FACE,1,0>()], c[index::<FACE,2,1>()]) =
-        (c[index::<FACE,1,0>()].compose(rot), c[index::<FACE,2,1>()].compose(rot), c[index::<FACE,1,2>()].compose(rot), c[index::<FACE,0,1>()].compose(rot));
+    (c[index([FACE,1,2])], c[index([FACE,0,1])], c[index([FACE,1,0])], c[index([FACE,2,1])]) =
+        (c[index([FACE,1,0])].compose(rot), c[index([FACE,2,1])].compose(rot), c[index([FACE,1,2])].compose(rot), c[index([FACE,0,1])].compose(rot));
     Cube { cubelets: c }
 }
 
 fn turn_face_x3<const FACE: usize>(cube: Cube, rot: Rotation) -> Cube {
     let mut c = cube.cubelets;
     // corners
-    (c[index::<FACE,2,2>()], c[index::<FACE,0,2>()], c[index::<FACE,0,0>()], c[index::<FACE,2,0>()]) =
-        (c[index::<FACE,0,2>()].compose(rot), c[index::<FACE,0,0>()].compose(rot), c[index::<FACE,2,0>()].compose(rot), c[index::<FACE,2,2>()].compose(rot));
+    (c[index([FACE,2,2])], c[index([FACE,0,2])], c[index([FACE,0,0])], c[index([FACE,2,0])]) =
+        (c[index([FACE,0,2])].compose(rot), c[index([FACE,0,0])].compose(rot), c[index([FACE,2,0])].compose(rot), c[index([FACE,2,2])].compose(rot));
     // edges
-    (c[index::<FACE,1,2>()], c[index::<FACE,0,1>()], c[index::<FACE,1,0>()], c[index::<FACE,2,1>()]) =
-        (c[index::<FACE,0,1>()].compose(rot), c[index::<FACE,1,0>()].compose(rot), c[index::<FACE,2,1>()].compose(rot), c[index::<FACE,1,2>()].compose(rot));
+    (c[index([FACE,1,2])], c[index([FACE,0,1])], c[index([FACE,1,0])], c[index([FACE,2,1])]) =
+        (c[index([FACE,0,1])].compose(rot), c[index([FACE,1,0])].compose(rot), c[index([FACE,2,1])].compose(rot), c[index([FACE,1,2])].compose(rot));
     Cube { cubelets: c }
 }
 
 fn turn_face_y<const FACE: usize>(cube: Cube, rot: Rotation) -> Cube {
     let mut c = cube.cubelets;
     // corners
-    (c[index::<2,FACE,2>()], c[index::<0,FACE,2>()], c[index::<0,FACE,0>()], c[index::<2,FACE,0>()]) =
-        (c[index::<0,FACE,2>()].compose(rot), c[index::<0,FACE,0>()].compose(rot), c[index::<2,FACE,0>()].compose(rot), c[index::<2,FACE,2>()].compose(rot));
+    (c[index([2,FACE,2])], c[index([0,FACE,2])], c[index([0,FACE,0])], c[index([2,FACE,0])]) =
+        (c[index([0,FACE,2])].compose(rot), c[index([0,FACE,0])].compose(rot), c[index([2,FACE,0])].compose(rot), c[index([2,FACE,2])].compose(rot));
     // edges
-    (c[index::<1,FACE,2>()], c[index::<0,FACE,1>()], c[index::<1,FACE,0>()], c[index::<2,FACE,1>()]) =
-        (c[index::<0,FACE,1>()].compose(rot), c[index::<1,FACE,0>()].compose(rot), c[index::<2,FACE,1>()].compose(rot), c[index::<1,FACE,2>()].compose(rot));
+    (c[index([1,FACE,2])], c[index([0,FACE,1])], c[index([1,FACE,0])], c[index([2,FACE,1])]) =
+        (c[index([0,FACE,1])].compose(rot), c[index([1,FACE,0])].compose(rot), c[index([2,FACE,1])].compose(rot), c[index([1,FACE,2])].compose(rot));
     Cube { cubelets: c }
 }
 
 fn turn_face_y2<const FACE: usize>(cube: Cube, rot: Rotation) -> Cube {
     let mut c = cube.cubelets;
     // corners
-    (c[index::<2,FACE,2>()], c[index::<0,FACE,2>()], c[index::<0,FACE,0>()], c[index::<2,FACE,0>()]) =
-        (c[index::<0,FACE,0>()].compose(rot), c[index::<2,FACE,0>()].compose(rot), c[index::<2,FACE,2>()].compose(rot), c[index::<0,FACE,2>()].compose(rot));
+    (c[index([2,FACE,2])], c[index([0,FACE,2])], c[index([0,FACE,0])], c[index([2,FACE,0])]) =
+        (c[index([0,FACE,0])].compose(rot), c[index([2,FACE,0])].compose(rot), c[index([2,FACE,2])].compose(rot), c[index([0,FACE,2])].compose(rot));
     // edges
-    (c[index::<1,FACE,2>()], c[index::<0,FACE,1>()], c[index::<1,FACE,0>()], c[index::<2,FACE,1>()]) =
-        (c[index::<1,FACE,0>()].compose(rot), c[index::<2,FACE,1>()].compose(rot), c[index::<1,FACE,2>()].compose(rot), c[index::<0,FACE,1>()].compose(rot));
+    (c[index([1,FACE,2])], c[index([0,FACE,1])], c[index([1,FACE,0])], c[index([2,FACE,1])]) =
+        (c[index([1,FACE,0])].compose(rot), c[index([2,FACE,1])].compose(rot), c[index([1,FACE,2])].compose(rot), c[index([0,FACE,1])].compose(rot));
     Cube { cubelets: c }
 }
 
 fn turn_face_y3<const FACE: usize>(cube: Cube, rot: Rotation) -> Cube {
     let mut c = cube.cubelets;
     // corners
-    (c[index::<2,FACE,2>()], c[index::<0,FACE,2>()], c[index::<0,FACE,0>()], c[index::<2,FACE,0>()]) =
-        (c[index::<2,FACE,0>()].compose(rot), c[index::<2,FACE,2>()].compose(rot), c[index::<0,FACE,2>()].compose(rot), c[index::<0,FACE,0>()].compose(rot));
+    (c[index([2,FACE,2])], c[index([0,FACE,2])], c[index([0,FACE,0])], c[index([2,FACE,0])]) =
+        (c[index([2,FACE,0])].compose(rot), c[index([2,FACE,2])].compose(rot), c[index([0,FACE,2])].compose(rot), c[index([0,FACE,0])].compose(rot));
     // edges
-    (c[index::<1,FACE,2>()], c[index::<0,FACE,1>()], c[index::<1,FACE,0>()], c[index::<2,FACE,1>()]) =
-        (c[index::<2,FACE,1>()].compose(rot), c[index::<1,FACE,2>()].compose(rot), c[index::<0,FACE,1>()].compose(rot), c[index::<1,FACE,0>()].compose(rot));
+    (c[index([1,FACE,2])], c[index([0,FACE,1])], c[index([1,FACE,0])], c[index([2,FACE,1])]) =
+        (c[index([2,FACE,1])].compose(rot), c[index([1,FACE,2])].compose(rot), c[index([0,FACE,1])].compose(rot), c[index([1,FACE,0])].compose(rot));
     Cube { cubelets: c }
 }
 
 fn turn_face_z<const FACE: usize>(cube: Cube, rot: Rotation) -> Cube {
     let mut c = cube.cubelets;
     // corners
-    (c[index::<2,2,FACE>()], c[index::<0,2,FACE>()], c[index::<0,0,FACE>()], c[index::<2,0,FACE>()]) =
-        (c[index::<2,0,FACE>()].compose(rot), c[index::<2,2,FACE>()].compose(rot), c[index::<0,2,FACE>()].compose(rot), c[index::<0,0,FACE>()].compose(rot));
+    (c[index([2,2,FACE])], c[index([0,2,FACE])], c[index([0,0,FACE])], c[index([2,0,FACE])]) =
+        (c[index([2,0,FACE])].compose(rot), c[index([2,2,FACE])].compose(rot), c[index([0,2,FACE])].compose(rot), c[index([0,0,FACE])].compose(rot));
     // edges
-    (c[index::<1,2,FACE>()], c[index::<0,1,FACE>()], c[index::<1,0,FACE>()], c[index::<2,1,FACE>()]) =
-        (c[index::<2,1,FACE>()].compose(rot), c[index::<1,2,FACE>()].compose(rot), c[index::<0,1,FACE>()].compose(rot), c[index::<1,0,FACE>()].compose(rot));
+    (c[index([1,2,FACE])], c[index([0,1,FACE])], c[index([1,0,FACE])], c[index([2,1,FACE])]) =
+        (c[index([2,1,FACE])].compose(rot), c[index([1,2,FACE])].compose(rot), c[index([0,1,FACE])].compose(rot), c[index([1,0,FACE])].compose(rot));
     Cube { cubelets: c }
 }
 
 fn turn_face_z2<const FACE: usize>(cube: Cube, rot: Rotation) -> Cube {
     let mut c = cube.cubelets;
     // corners
-    (c[index::<2,2,FACE>()], c[index::<0,2,FACE>()], c[index::<0,0,FACE>()], c[index::<2,0,FACE>()]) =
-        (c[index::<0,0,FACE>()].compose(rot), c[index::<2,0,FACE>()].compose(rot), c[index::<2,2,FACE>()].compose(rot), c[index::<0,2,FACE>()].compose(rot));
+    (c[index([2,2,FACE])], c[index([0,2,FACE])], c[index([0,0,FACE])], c[index([2,0,FACE])]) =
+        (c[index([0,0,FACE])].compose(rot), c[index([2,0,FACE])].compose(rot), c[index([2,2,FACE])].compose(rot), c[index([0,2,FACE])].compose(rot));
     // edges
-    (c[index::<1,2,FACE>()], c[index::<0,1,FACE>()], c[index::<1,0,FACE>()], c[index::<2,1,FACE>()]) =
-        (c[index::<1,0,FACE>()].compose(rot), c[index::<2,1,FACE>()].compose(rot), c[index::<1,2,FACE>()].compose(rot), c[index::<0,1,FACE>()].compose(rot));
+    (c[index([1,2,FACE])], c[index([0,1,FACE])], c[index([1,0,FACE])], c[index([2,1,FACE])]) =
+        (c[index([1,0,FACE])].compose(rot), c[index([2,1,FACE])].compose(rot), c[index([1,2,FACE])].compose(rot), c[index([0,1,FACE])].compose(rot));
     Cube { cubelets: c }
 }
 
 fn turn_face_z3<const FACE: usize>(cube: Cube, rot: Rotation) -> Cube {
     let mut c = cube.cubelets;
     // corners
-    (c[index::<2,2,FACE>()], c[index::<0,2,FACE>()], c[index::<0,0,FACE>()], c[index::<2,0,FACE>()]) =
-        (c[index::<0,2,FACE>()].compose(rot), c[index::<0,0,FACE>()].compose(rot), c[index::<2,0,FACE>()].compose(rot), c[index::<2,2,FACE>()].compose(rot));
+    (c[index([2,2,FACE])], c[index([0,2,FACE])], c[index([0,0,FACE])], c[index([2,0,FACE])]) =
+        (c[index([0,2,FACE])].compose(rot), c[index([0,0,FACE])].compose(rot), c[index([2,0,FACE])].compose(rot), c[index([2,2,FACE])].compose(rot));
     // edges
-    (c[index::<1,2,FACE>()], c[index::<0,1,FACE>()], c[index::<1,0,FACE>()], c[index::<2,1,FACE>()]) =
-        (c[index::<0,1,FACE>()].compose(rot), c[index::<1,0,FACE>()].compose(rot), c[index::<2,1,FACE>()].compose(rot), c[index::<1,2,FACE>()].compose(rot));
+    (c[index([1,2,FACE])], c[index([0,1,FACE])], c[index([1,0,FACE])], c[index([2,1,FACE])]) =
+        (c[index([0,1,FACE])].compose(rot), c[index([1,0,FACE])].compose(rot), c[index([2,1,FACE])].compose(rot), c[index([1,2,FACE])].compose(rot));
     Cube { cubelets: c }
 }
 
@@ -309,6 +354,50 @@ impl Cube {
 
     pub fn entropy(&self) -> f32 {
         todo!()
+    }
+
+    pub fn shift_forward(&self, mutations: &[Rotation; 20]) -> Self {
+        Self {
+            cubelets: mutations.into_iter()
+                .enumerate()
+                .map(|(i, &rot)| {
+                    index(shift_coords(coords(i), rot))
+                })
+                .map(|ind| self.cubelets[ind])
+                .collect::<Vec<_>>()
+                .try_into()
+                .unwrap()
+        }
+    }
+
+    pub fn shift_backward(&self, mutations: &[Rotation; 20]) -> Self {
+        Self {
+            cubelets: mutations.into_iter()
+                .enumerate()
+                .map(|(i, rot)| {
+                    index(shift_coords(coords(i), rot.inverse()))
+                })
+                .map(|ind| self.cubelets[ind])
+                .collect::<Vec<_>>()
+                .try_into()
+                .unwrap()
+        }
+    }
+
+    // TODO: Give a good explanation of how this works
+    pub fn difference(&self, other: &Self) -> Self {
+        // FP stands for fixed-position notation
+        let fp_self = self.shift_backward(&self.cubelets).cubelets;
+        let diff = Self {
+            cubelets: fp_self.iter()
+                .zip(other.shift_backward(&other.cubelets).cubelets.iter())
+                .map(|(a, &b)| a.difference(b))
+                .collect::<Vec<_>>()
+                .try_into()
+                .unwrap()
+        };
+        let fp_x = diff.shift_forward(&fp_self);
+        fp_x.shift_forward(&fp_x.cubelets)
     }
 }
 

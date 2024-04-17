@@ -9,7 +9,7 @@ use std::{
 
 use clap::Parser;
 use rubiks::{
-    cube::{Cube, CubePath, Info, Move, index, self},
+    cube::{Cube, CubePath, Info, Move, self},
     cubelet::{Cubelet, Rotation, Axis},
     view::DisplayCube,
     strategy::{MultiTree, PartialTree, Tree, Strategy, Cycle},
@@ -26,13 +26,13 @@ struct Args {
 fn main() -> Result<(), std::io::Error> {
     let args = Args::parse();
 
-    // let strategy = Tree { prev_move: None, current_depth: 0, search_depth: args.depth };
+    let strategy = Tree { prev_move: None, current_depth: 0, search_depth: args.depth };
     // let strategy = Cycle { moves: vec![ Move(1, 0, Axis::X), Move(0, 1, Axis::Y) ] };
     // let strategy = PartialTree { axes: vec![Axis::X, Axis::Y, Axis::X, Axis::Z, Axis::Y], current_depth: 0 };
-    let strategy = MultiTree {
-        search_depth: args.depth,
-        jobs: Move::ALL.into_iter().map(|m| vec![m]).collect()
-    };
+    // let strategy = MultiTree {
+    //     search_depth: args.depth,
+    //     jobs: Move::ALL.into_iter().map(|m| vec![m]).collect()
+    // };
     let mut store = Store::with_capacity(34_000_000);
     store.expand(strategy, vec![]);
 
