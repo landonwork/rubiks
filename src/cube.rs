@@ -18,14 +18,14 @@ pub struct Cube<T: SortBy> {
     _phantom: PhantomData<T>
 }
 
-trait SortBy {}
+pub(crate) trait SortBy {}
 
 #[derive(Clone, Debug, Default, PartialEq, Eq, Hash)]
-struct Position;
+pub(crate) struct Position;
 impl SortBy for Position {}
 
 #[derive(Clone, Debug, Default, PartialEq, Eq, Hash)]
-struct Id;
+pub(crate) struct Id;
 impl SortBy for Id {}
 
 impl<T: SortBy> Display for Cube<T> {
@@ -44,21 +44,6 @@ impl<T: SortBy> IntoIterator for Cube<T> {
         self.cubelets.into_iter()
     }
 }
-
-// impl<T: SortBy> FromStr for Cube<T> {
-//     type Err = std::io::Error;
-//     fn from_str(value: &str) -> Result<Self, Self::Err> {
-//         Ok(Self::new( value.as_bytes()
-//             .into_iter()
-//             .map(|&b| unsafe { std::mem::transmute(b - b'A') })
-//             .collect::<Vec<_>>()
-//             .try_into()
-//             .map_err(|_| io::Error::new(io::ErrorKind::InvalidData, value.to_owned()))?
-//         ))
-//     }
-// }
-
-
 
 #[allow(non_snake_case)]
 #[inline]
@@ -325,11 +310,6 @@ impl<T: SortBy> Cube<T> {
 
     pub fn parity(&self) -> u8 {
         self.cubelets.iter().map(|r| r.len()).sum()
-    }
-
-    pub fn as_bytes(&self) -> &[u8] {
-        let ptr = self.cubelets.as_slice().as_ptr().cast::<u8>();
-        unsafe { std::ptr::slice_from_raw_parts(ptr, 20).as_ref().unwrap() }
     }
 }
 

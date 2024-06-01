@@ -4,18 +4,19 @@
 
 use std::{
     thread::{JoinHandle, self},
-    collections::HashMap
+    // collections::HashMap
 };
 
 use crate::{
-    cube::{Cube, Move},
+    action::Move,
+    cube::{Cube, Position},
     cubelet::Axis,
-    store::Store,
-    view::DisplayCube,
+    book::Book,
+    // view::DisplayCube,
 };
 
 pub trait Strategy {
-    fn explore(&self, store: &mut Store, cube: &Cube);
+    fn explore(&self, book: &mut Book, cube: &Cube<Position>);
 }
 
 // Depth-first brute force search (slightly optimized)
@@ -27,42 +28,42 @@ pub struct Tree {
 }
 
 impl Strategy for Tree {
-    fn explore(&self, store: &mut Store, cube: &Cube) {
-        if self.current_depth >= self.search_depth {
-            return
-        }
+    fn explore(&self, book: &mut Book, cube: &Cube<Position>) {
+        // if self.current_depth >= self.search_depth {
+        //     return
+        // }
 
-        let iter: Box<dyn Iterator<Item = Move>> = match self.prev_move {
-            None => Box::new(Move::ALL.into_iter()),
-            Some(Move(_, _, Axis::X)) => Box::new(Move::Y.into_iter().chain(Move::Z)),
-            Some(Move(_, _, Axis::Y)) => Box::new(Move::X.into_iter().chain(Move::Z)),
-            Some(Move(_, _, Axis::Z)) => Box::new(Move::X.into_iter().chain(Move::Y)),
-        };
+        // let iter: Box<dyn Iterator<Item = Move>> = match self.prev_move {
+        //     None => Box::new(Move::ALL.into_iter()),
+        //     Some(Move(_, _, Axis::X)) => Box::new(Move::Y.into_iter().chain(Move::Z)),
+        //     Some(Move(_, _, Axis::Y)) => Box::new(Move::X.into_iter().chain(Move::Z)),
+        //     Some(Move(_, _, Axis::Z)) => Box::new(Move::X.into_iter().chain(Move::Y)),
+        // };
 
-        iter.for_each(|m| {
-            let new_cube = cube.clone().make_move(m); 
-            match store.get_mut(&new_cube) {
-                Some(depth_ref_mut) if *depth_ref_mut > self.current_depth + 1 => {
-                    *depth_ref_mut = self.current_depth + 1;
-                    let new_strat = Tree {
-                        prev_move: Some(m),
-                        current_depth: self.current_depth + 1,
-                        search_depth: self.search_depth
-                    };
-                    new_strat.explore(store, &new_cube);
-                }
-                Some(_) => {  }
-                None => {
-                    store.insert(new_cube.clone(), self.current_depth + 1);
-                    let new_strat = Tree {
-                        prev_move: Some(m),
-                        current_depth: self.current_depth + 1,
-                        search_depth: self.search_depth
-                    };
-                    new_strat.explore(store, &new_cube);
-                }
-            }
-        });
+        // iter.for_each(|m| {
+        //     let new_cube = cube.clone().make_move(m); 
+        //     match book.get_mut(&new_cube) {
+        //         Some(depth_ref_mut) if *depth_ref_mut > self.current_depth + 1 => {
+        //             *depth_ref_mut = self.current_depth + 1;
+        //             let new_strat = Tree {
+        //                 prev_move: Some(m),
+        //                 current_depth: self.current_depth + 1,
+        //                 search_depth: self.search_depth
+        //             };
+        //             new_strat.explore(book, &new_cube);
+        //         }
+        //         Some(_) => {  }
+        //         None => {
+        //             book.insert(new_cube.clone(), self.current_depth + 1);
+        //             let new_strat = Tree {
+        //                 prev_move: Some(m),
+        //                 current_depth: self.current_depth + 1,
+        //                 search_depth: self.search_depth
+        //             };
+        //             new_strat.explore(book, &new_cube);
+        //         }
+        //     }
+        // });
     }
 }
 
@@ -149,47 +150,47 @@ pub struct MultiTree {
 }
 
 impl Strategy for MultiTree {
-    fn explore(&self, store: &mut Store, cube: &Cube) {
-        // Getting things set up
-        let starts: Vec<_> = self.jobs.iter()
-            .map(|moves| {
-                let last_move = moves.last().clone();
-                let (cube, depth) = moves.into_iter().fold(
-                    (cube.clone(), 0),
-                    |(acc, d), &m| {
-                        let new = acc.make_move(m);
-                        store.insert(new.clone(), d + 1);
-                        (new, d + 1)
-                    });
-                (cube, depth, last_move)
-            })
-            .collect();
+    fn explore(&self, book: &mut Book, cube: &Cube<Position>) {
+        // // Getting things set up
+        // let starts: Vec<_> = self.jobs.iter()
+        //     .map(|moves| {
+        //         let last_move = moves.last().clone();
+        //         let (cube, depth) = moves.into_iter().fold(
+        //             (cube.clone(), 0),
+        //             |(acc, d), &m| {
+        //                 let new = acc.make_move(m);
+        //                 book.insert(new.clone(), d + 1);
+        //                 (new, d + 1)
+        //             });
+        //         (cube, depth, last_move)
+        //     })
+        //     .collect();
 
 
-        // Spawn all those tasks
-        let mut pool = ThreadPool::new();
-        let spawner = starts.into_iter()
-            .map(|(start, depth, last_move)| {
-                let cap = store.capacity() / self.jobs.len();
-                let mut inner = HashMap::with_capacity(cap);
-                inner.extend(store.iter().map(|(a, b)| (a.clone(), b.clone())));
-                let mut local_store = Store(inner);
-                let tree = Tree {
-                    prev_move: last_move.copied(),
-                    current_depth: depth,
-                    search_depth: self.search_depth
-                };
-                let closure: Box<dyn Send + FnOnce() -> Store> = Box::new(move || {
-                    local_store.expand(tree, vec![Box::new(move |cube, _depth| cube == &start)]);
-                    local_store
-                });
-                closure
-            });
-        let stores = pool.spawn_all(spawner);
+        // // Spawn all those tasks
+        // let mut pool = ThreadPool::new();
+        // let spawner = starts.into_iter()
+        //     .map(|(start, depth, last_move)| {
+        //         let cap = book.capacity() / self.jobs.len();
+        //         let mut inner = HashMap::with_capacity(cap);
+        //         inner.extend(book.iter().map(|(a, b)| (a.clone(), b.clone())));
+        //         let mut local_book = Book(inner);
+        //         let tree = Tree {
+        //             prev_move: last_move.copied(),
+        //             current_depth: depth,
+        //             search_depth: self.search_depth
+        //         };
+        //         let closure: Box<dyn Send + FnOnce() -> Book> = Box::new(move || {
+        //             local_book.expand(tree, vec![Box::new(move |cube, _depth| cube == &start)]);
+        //             local_book
+        //         });
+        //         closure
+        //     });
+        // let books = pool.spawn_all(spawner);
 
-        for other in stores {
-            store.extend_from_store(other);
-        }
+        // for other in books {
+        //     book.extend_from_book(other);
+        // }
     }
 }
 
@@ -207,39 +208,39 @@ pub struct PartialTree {
 }
 
 impl Strategy for PartialTree {
-    fn explore(&self, store: &mut Store, cube: &Cube) {
-        if self.axes.is_empty() {
-            return
-        }
+    fn explore(&self, book: &mut Book, cube: &Cube<Position>) {
+        // if self.axes.is_empty() {
+        //     return
+        // }
 
-        let iter = match self.axes.first().unwrap() {
-            Axis::X => Move::X,
-            Axis::Y => Move::Y,
-            Axis::Z => Move::Z,
-        };
+        // let iter = match self.axes.first().unwrap() {
+        //     Axis::X => Move::X,
+        //     Axis::Y => Move::Y,
+        //     Axis::Z => Move::Z,
+        // };
 
-        iter.into_iter().for_each(|m| {
-            let new_cube = cube.clone().make_move(m); 
-            match store.get_mut(&new_cube) {
-                Some(depth_ref_mut) if *depth_ref_mut > self.current_depth + 1 => {
-                    *depth_ref_mut = self.current_depth + 1;
-                    let new_strat = PartialTree {
-                        axes: self.axes[1..].to_vec(),
-                        current_depth: self.current_depth + 1,
-                    };
-                    new_strat.explore(store, &new_cube);
-                }
-                Some(_) => {  }
-                None => {
-                    store.insert(new_cube.clone(), self.current_depth + 1);
-                    let new_strat = PartialTree {
-                        axes: self.axes[1..].to_vec(),
-                        current_depth: self.current_depth + 1,
-                    };
-                    new_strat.explore(store, &new_cube);
-                }
-            }
-        });
+        // iter.into_iter().for_each(|m| {
+        //     let new_cube = cube.clone().make_move(m); 
+        //     match book.get_mut(&new_cube) {
+        //         Some(depth_ref_mut) if *depth_ref_mut > self.current_depth + 1 => {
+        //             *depth_ref_mut = self.current_depth + 1;
+        //             let new_strat = PartialTree {
+        //                 axes: self.axes[1..].to_vec(),
+        //                 current_depth: self.current_depth + 1,
+        //             };
+        //             new_strat.explore(book, &new_cube);
+        //         }
+        //         Some(_) => {  }
+        //         None => {
+        //             book.insert(new_cube.clone(), self.current_depth + 1);
+        //             let new_strat = PartialTree {
+        //                 axes: self.axes[1..].to_vec(),
+        //                 current_depth: self.current_depth + 1,
+        //             };
+        //             new_strat.explore(book, &new_cube);
+        //         }
+        //     }
+        // });
     }
 }
 
@@ -250,48 +251,48 @@ pub struct Cycle {
 
 // TODO: Some cycles are too large to use a u8 for depth!
 impl Strategy for Cycle {
-    fn explore(&self, store: &mut Store, start_cube: &Cube) {
-        let mut depth = *store.get(start_cube).unwrap();
-        let mut cube = start_cube.clone();
+    fn explore(&self, book: &mut Book, start_cube: &Cube<Position>) {
+        // let mut depth = *book.get(start_cube).unwrap();
+        // let mut cube = start_cube.clone();
 
-        for &m in self.moves.iter().cycle() {
-            cube = cube.make_move(m);
-            depth += 1;
+        // for &m in self.moves.iter().cycle() {
+        //     cube = cube.make_move(m);
+        //     depth += 1;
 
-            match store.get_mut(&cube) {
-                // If we find we have better depth information than the
-                // our current collected knowledge
-                Some(depth_mut_ref) if *depth_mut_ref > depth => {
-                    // Update our knowledge to match our depth estimate
-                    *depth_mut_ref = depth;
-                    // Update that cube's neighbors
-                    Update.explore(store, &cube);
-                }
-                // If we are overestimating our current depth
-                Some(depth_mut_ref) if *depth_mut_ref < depth => {
-                    println!("Whoops! We looped back on ourselves. Let's get our depth back on track!");
-                    // Update the depth to match our collected knowledge
-                    depth = *depth_mut_ref;
-                    if depth == 0 {
-                        println!("Depth 0?\n{}", DisplayCube(cube.clone()));
-                    }
-                    // Update the path we just came from
-                    Update.explore(store, &cube);
-                }
-                // Nothing needs to be done
-                Some(_) => {  }
-                // Insert the cube
-                None => {
-                    store.insert(cube.clone(), depth);
-                }
-            }
+        //     match book.get_mut(&cube) {
+        //         // If we find we have better depth information than the
+        //         // our current collected knowledge
+        //         Some(depth_mut_ref) if *depth_mut_ref > depth => {
+        //             // Update our knowledge to match our depth estimate
+        //             *depth_mut_ref = depth;
+        //             // Update that cube's neighbors
+        //             Update.explore(book, &cube);
+        //         }
+        //         // If we are overestimating our current depth
+        //         Some(depth_mut_ref) if *depth_mut_ref < depth => {
+        //             println!("Whoops! We looped back on ourselves. Let's get our depth back on track!");
+        //             // Update the depth to match our collected knowledge
+        //             depth = *depth_mut_ref;
+        //             if depth == 0 {
+        //                 println!("Depth 0?\n{}", DisplayCube(cube.clone()));
+        //             }
+        //             // Update the path we just came from
+        //             Update.explore(book, &cube);
+        //         }
+        //         // Nothing needs to be done
+        //         Some(_) => {  }
+        //         // Insert the cube
+        //         None => {
+        //             book.insert(cube.clone(), depth);
+        //         }
+        //     }
 
-            // If we have returned to our original state (and updated all of our known info),
-            // then we can stop. Otherwise, we just keep on going.
-            if &cube == start_cube {
-                break
-            }
-        }
+        //     // If we have returned to our original state (and updated all of our known info),
+        //     // then we can stop. Otherwise, we just keep on going.
+        //     if &cube == start_cube {
+        //         break
+        //     }
+        // }
     }
 }
 
@@ -331,27 +332,27 @@ pub struct Flood {
 pub struct Update;
 
 impl Strategy for Update {
-    fn explore(&self, store: &mut Store, cube: &Cube) {
-        let depth = *store.get(cube).unwrap();
-        Move::ALL.into_iter()
-            .for_each(|m| {
-                let new_cube = cube.clone().make_move(m);
-                match store.get_mut(&new_cube)  {
-                    Some(depth_mut_ref) if *depth_mut_ref > depth + 1 => {
-                        *depth_mut_ref = depth + 1;
-                        Update.explore(store, &new_cube);
-                    }
-                    // We might learn that even though we thought we were updating our current
-                    // location with the best information, there is actually better information out
-                    // there that we should be using
-                    Some(depth_mut_ref) if *depth_mut_ref < depth - 1 => {
-                        let current_depth = *depth_mut_ref + 1;
-                        store.insert(cube.clone(), current_depth);
-                        Update.explore(store, cube);
-                    }
-                    _ => {  }
-                }
-            })
+    fn explore(&self, _book: &mut Book, _cube: &Cube<Position>) {
+        // let depth = *book.get(cube).unwrap();
+        // Move::ALL.into_iter()
+        //     .for_each(|m| {
+        //         let new_cube = cube.clone().make_move(m);
+        //         match book.get_mut(&new_cube)  {
+        //             Some(depth_mut_ref) if *depth_mut_ref > depth + 1 => {
+        //                 *depth_mut_ref = depth + 1;
+        //                 Update.explore(book, &new_cube);
+        //             }
+        //             // We might learn that even though we thought we were updating our current
+        //             // location with the best information, there is actually better information out
+        //             // there that we should be using
+        //             Some(depth_mut_ref) if *depth_mut_ref < depth - 1 => {
+        //                 let current_depth = *depth_mut_ref + 1;
+        //                 book.insert(cube.clone(), current_depth);
+        //                 Update.explore(book, cube);
+        //             }
+        //             _ => {  }
+        //         }
+        //     })
     }
 }
 

@@ -1,3 +1,7 @@
+//! The actions provided for generating the Rubik's cube group. [`Move`] is the primary construct
+//! and there will be an analagous type for familiar notation mapped to it. I can put a description
+//! of how that works later. I hope to make it so you can pick and choose your set of generators.
+
 use std::{
     fmt::Display, 
     io, 
