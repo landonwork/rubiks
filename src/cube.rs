@@ -220,7 +220,7 @@ static TURN_FAR_FACES: [fn(Cube<Position>, Rotation) -> Cube<Position>; 9] = [
 ];
 
 pub fn shift_forward(cubelets: &[Rotation; 20], mutations: &[Rotation; 20]) -> [Rotation; 20] {
-    mutations.into_iter()
+    mutations.iter()
         .enumerate()
         .map(|(i, rot)| index(shift_coords(coords(i), *rot)))
         .map(|ind| cubelets[ind])
@@ -230,7 +230,7 @@ pub fn shift_forward(cubelets: &[Rotation; 20], mutations: &[Rotation; 20]) -> [
 }
 
 pub fn shift_backward(cubelets: &[Rotation; 20], mutations: &[Rotation; 20]) -> [Rotation; 20] {
-    mutations.into_iter()
+    mutations.iter()
         .enumerate()
         .map(|(i, rot)| index(shift_coords(coords(i), rot.inverse())))
         .map(|ind| cubelets[ind])
@@ -264,7 +264,7 @@ impl Cube<Position> {
     }
 
     pub fn by_id(&self, mutations: &[Rotation; 20]) -> Cube<Id> {
-        Cube::new(mutations.into_iter()
+        Cube::new(mutations.iter()
             .enumerate()
             .map(|(i, rot)| index(shift_coords(coords(i), rot.inverse())))
             .map(|ind| self.cubelets[ind])
@@ -291,7 +291,7 @@ impl Cube<Position> {
 
 impl Cube<Id> {
     pub fn by_position(&self, mutations: &[Rotation; 20]) -> Cube<Position> {
-        Cube::new(mutations.into_iter()
+        Cube::new(mutations.iter()
             .enumerate()
             .map(|(i, &rot)| index(shift_coords(coords(i), rot)))
             .map(|ind| self.cubelets[ind])
@@ -305,7 +305,7 @@ impl Cube<Id> {
 impl<T: SortBy> Cube<T> {
     #[inline]
     pub fn new(cubelets: [Rotation; 20]) -> Self {
-        Self { cubelets, _phantom: PhantomData::default() }
+        Self { cubelets, _phantom: PhantomData }
     }
 
     pub fn parity(&self) -> u8 {

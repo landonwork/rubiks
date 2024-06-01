@@ -123,7 +123,7 @@ impl<T: Send + 'static> ThreadPool<T> {
                     match &self.threads[i] {
                         None => { finished += 1; }
                         Some(handle) if handle.is_finished() => {
-                            let finished_handle = std::mem::replace(&mut self.threads[i], None);
+                            let finished_handle = self.threads[i].take();
                             results.push(finished_handle.unwrap().join().unwrap());
                             finished += 1;
                         }

@@ -395,7 +395,7 @@ impl Cubelet {
     pub fn from_two_facelets(pair1: FacePair, pair2: FacePair) -> Self {
         let mut ind = 0;
         let mut iter = CUBELET_PAIRS.iter().enumerate();
-        while let Some((i, cubelet_pairs)) = iter.next() {
+        for (i, cubelet_pairs) in iter {
         // for (i, cubelet_pairs) in CUBELET_PAIRS.iter().enumerate() {
            if cubelet_pairs.0.contains(&pair1) && cubelet_pairs.0.contains(&pair2) {
                 ind = i;
