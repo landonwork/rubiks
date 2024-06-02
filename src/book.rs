@@ -4,8 +4,8 @@
 use sled::Tree;
 
 use crate::{
-    action::{Turn, QuarterTurn},
-    cubelet::Rotation
+    action::{Move, Turn, QuarterTurn},
+    cubelet::{Axis, Rotation}
 };
 
 pub trait Book {}
@@ -49,11 +49,18 @@ impl Packable for Rotation {
     const PACKED_BITS: usize = 5;
 }
 
-// Packable only works with #[repr(u8)] enum :/
-// impl Packable for Move {
-//     // 45 moves
-//     const PACKED_BITS: usize = 6;
-// }
+impl Packable for Move {
+    // 45 moves
+    const PACKED_BITS: usize = 6;
+
+    fn to_byte(&self) -> u8 {
+        Move::ALL.iter().position(|x| x == self).unwrap() as u8
+    }
+
+    fn from_byte(byte: u8) -> Option<Self> {
+        Move::ALL.get(byte as usize).copied()
+    }
+}
 
 impl Packable for Turn {
     // 18 turns
@@ -134,6 +141,8 @@ mod tests {
     #![allow(dead_code)]
     use super::*;
 
+    // All of these tests should be of a length that requires padding at the end of the packed
+    // version
     #[test]
     fn test_pack() {
         #[derive(Copy, Clone)]
@@ -156,6 +165,27 @@ mod tests {
         let bytes = [0b00000101, 0b00111001, 0b01111111];
         let actual = unpack(bytes.as_slice());
         assert_eq!(expected.as_slice(), actual.as_slice());
+    }
+
+    #[test]
+    fn test_pack_unpack_move() {
+        let input = vec![Move(Axis::X, 1, 1), Move(Axis::Y, 1, 3), Move(Axis::X, 0, 1)];
+        let output = unpack(&pack(&input));
+        assert_eq!(input, output);
+    }
+
+    #[test]
+    fn test_pack_unpack_turn() {
+        let input = vec![Turn::L, Turn::B, Turn::R3, Turn::D3, Turn::F2];
+        let output = unpack(&pack(&input));
+        assert_eq!(input, output);
+    }
+
+    #[test]
+    fn test_pack_unpack_quarter_turn() {
+        let input = vec![QuarterTurn::L, QuarterTurn::B, QuarterTurn::R3, QuarterTurn::D3, QuarterTurn::F];
+        let output = unpack(&pack(&input));
+        assert_eq!(input, output);
     }
 
     #[test]
