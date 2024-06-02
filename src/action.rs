@@ -99,13 +99,13 @@ impl Move {
 
 #[derive(Copy, Clone, PartialEq, Eq, Debug)]
 #[repr(u8)]
-enum Turn {
+pub enum Turn {
     L, L2, L3,
     R, R2, R3,
-    U, U2, U3,
-    D, D2, D3,
     F, F2, F3,
     B, B2, B3,
+    D, D2, D3,
+    U, U2, U3,
 }
 
 impl From<Turn> for Move {

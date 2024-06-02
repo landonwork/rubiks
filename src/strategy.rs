@@ -16,7 +16,7 @@ use crate::{
 };
 
 pub trait Strategy {
-    fn explore(&self, book: &mut Book, cube: &Cube<Position>);
+    fn explore(&self, book: &dyn Book, cube: &Cube<Position>);
 }
 
 // Depth-first brute force search (slightly optimized)
@@ -28,7 +28,7 @@ pub struct Tree {
 }
 
 impl Strategy for Tree {
-    fn explore(&self, book: &mut Book, cube: &Cube<Position>) {
+    fn explore(&self, book: &dyn Book, cube: &Cube<Position>) {
         // if self.current_depth >= self.search_depth {
         //     return
         // }
@@ -75,6 +75,11 @@ struct ThreadPool<T> {
 impl<T: Send + 'static> ThreadPool<T> {
     fn new() -> Self {
         let num_cpus = thread::available_parallelism().unwrap().get();
+        let threads = (0..num_cpus).map(|_| None).collect();
+        Self { threads }
+    }
+
+    fn n_threads(num_cpus: usize) -> Self {
         let threads = (0..num_cpus).map(|_| None).collect();
         Self { threads }
     }
@@ -150,7 +155,7 @@ pub struct MultiTree {
 }
 
 impl Strategy for MultiTree {
-    fn explore(&self, book: &mut Book, cube: &Cube<Position>) {
+    fn explore(&self, book: &dyn Book, cube: &Cube<Position>) {
         // // Getting things set up
         // let starts: Vec<_> = self.jobs.iter()
         //     .map(|moves| {
@@ -208,7 +213,7 @@ pub struct PartialTree {
 }
 
 impl Strategy for PartialTree {
-    fn explore(&self, book: &mut Book, cube: &Cube<Position>) {
+    fn explore(&self, book: &dyn Book, cube: &Cube<Position>) {
         // if self.axes.is_empty() {
         //     return
         // }
@@ -251,7 +256,7 @@ pub struct Cycle {
 
 // TODO: Some cycles are too large to use a u8 for depth!
 impl Strategy for Cycle {
-    fn explore(&self, book: &mut Book, start_cube: &Cube<Position>) {
+    fn explore(&self, book: &dyn Book, start_cube: &Cube<Position>) {
         // let mut depth = *book.get(start_cube).unwrap();
         // let mut cube = start_cube.clone();
 
@@ -332,7 +337,7 @@ pub struct Flood {
 pub struct Update;
 
 impl Strategy for Update {
-    fn explore(&self, _book: &mut Book, _cube: &Cube<Position>) {
+    fn explore(&self, _book: &dyn Book, _cube: &Cube<Position>) {
         // let depth = *book.get(cube).unwrap();
         // Move::ALL.into_iter()
         //     .for_each(|m| {
@@ -367,7 +372,7 @@ mod tests {
     // I'm just not in the mood to figure it out
     #[test]
     fn test_pool() {
-        let mut pool = ThreadPool::new();
+        let mut pool = ThreadPool::n_threads(4);
         let spawner: Vec<_> = (0..10).map(|i| {
             let closure: Box<dyn Send + FnOnce() -> u64> = Box::new(
                 move || {
@@ -382,7 +387,7 @@ mod tests {
         pool.spawn_all(spawner.into_iter());
         let duration = Instant::now().duration_since(begin);
 
-        let expected_min = Duration::from_secs(15);
-        assert!(expected_min < duration, "{duration:?}");
+        let expected_minimum = Duration::from_secs(15);
+        assert!(expected_minimum < duration, "{duration:?}");
     }
 }
