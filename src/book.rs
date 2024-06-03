@@ -1,20 +1,46 @@
 //! A construct that represents accumulated knowledge of the Rubik's cube group. This will be the
 //! starting point for creating a training dataset for an agent.
 
-use sled::Tree;
+use std::{io, marker::PhantomData};
+
+use sled::{self, Db, Tree};
 
 use crate::{
     action::{Move, Turn, QuarterTurn},
-    cubelet::{Axis, Rotation}
+    cubelet::Rotation
 };
 
-pub trait Book {}
+// TODO: when integrating pyo3, perhaps switch out for PyInto<PyInt> or whatever
+trait Int {}
+impl Int for u8 {}
+impl Int for u16 {}
+impl Int for u32 {}
 
+// I think we always store the cube as the key, followed by the depth (u8, u16, u32), followed by
+// the word (which has a variable length). There will be a special entry that records the format of
+// the Book. On opening an existing Book, it checks the data format and returns an error if the
+// format does not match the generics in the tree.
 #[derive(Clone)]
-pub struct DepthBook(pub(crate) Tree);
+pub struct Book<Depth = u16, Action = Turn> {
+    // Db struct included to have access to the size_on_disk method
+    db: Db,
+    inner: Tree,
+    is_packed: bool,
+    _phantom: PhantomData<(Depth, Action)>,
+}
 
-impl DepthBook {
-    fn close(self) -> Result<(), ()> {
+enum Action { Move, Turn, QuarterTurn }
+
+impl<D: Int, A: Packable> Book<D, A> {
+    fn open() -> io::Result<()> {
+        todo!()
+    }
+
+    fn create() -> io::Result<()> {
+        todo!()
+    }
+
+    fn get_format(&self) -> (usize, Action) {
         todo!()
     }
 }
@@ -45,12 +71,12 @@ trait Packable: Copy {
 }
 
 impl Packable for Rotation {
-    // 24 rotations
+    // 24 rotations < 32
     const PACKED_BITS: usize = 5;
 }
 
 impl Packable for Move {
-    // 45 moves
+    // 45 moves < 64
     const PACKED_BITS: usize = 6;
 
     fn to_byte(&self) -> u8 {
@@ -63,12 +89,12 @@ impl Packable for Move {
 }
 
 impl Packable for Turn {
-    // 18 turns
+    // 18 turns < 32
     const PACKED_BITS: usize = 5;
 }
 
 impl Packable for QuarterTurn {
-    // 12 turns
+    // 12 turns < 16
     const PACKED_BITS: usize = 4;
 }
 
