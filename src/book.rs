@@ -1,20 +1,58 @@
 //! A construct that represents accumulated knowledge of the Rubik's cube group. This will be the
 //! starting point for creating a training dataset for an agent.
 
-use std::{io, marker::PhantomData};
+use std::{borrow::Borrow, io, marker::PhantomData};
 
 use sled::{self, Db, Tree};
 
 use crate::{
-    action::{Move, Turn, QuarterTurn},
-    cubelet::Rotation
+    action::{Move, Turn, QuarterTurn, Word},
+    cubelet::Rotation,
+    as_bytes
 };
 
-// TODO: when integrating pyo3, perhaps switch out for PyInto<PyInt> or whatever
-trait Int {}
-impl Int for u8 {}
-impl Int for u16 {}
-impl Int for u32 {}
+trait Int {
+    type ToBytes: Borrow<[u8]>;
+    fn to_bytes(&self) -> Self::ToBytes;
+    fn from_bytes(bytes: &[u8]) -> Self;
+}
+
+impl Int for u8 {
+    type ToBytes = [u8; 1];
+
+    fn to_bytes(&self) -> Self::ToBytes {
+        self.to_le_bytes()
+    }
+
+    fn from_bytes(bytes: &[u8]) -> Self {
+        debug_assert_eq!(bytes.len(), 1);
+        bytes[0]
+    }
+}
+
+impl Int for u16 {
+    type ToBytes = [u8; 2];
+
+    fn to_bytes(&self) -> Self::ToBytes {
+        self.to_le_bytes()
+    }
+
+    fn from_bytes(bytes: &[u8]) -> Self {
+        u16::from_le_bytes(bytes.try_into().unwrap())
+    }
+}
+
+impl Int for u32 {
+    type ToBytes = [u8; 4];
+
+    fn to_bytes(&self) -> Self::ToBytes {
+        self.to_le_bytes()
+    }
+
+    fn from_bytes(bytes: &[u8]) -> Self {
+        u32::from_le_bytes(bytes.try_into().unwrap())
+    }
+}
 
 // I think we always store the cube as the key, followed by the depth (u8, u16, u32), followed by
 // the word (which has a variable length). There will be a special entry that records the format of
@@ -25,13 +63,10 @@ pub struct Book<Depth = u16, Action = Turn> {
     // Db struct included to have access to the size_on_disk method
     db: Db,
     inner: Tree,
-    is_packed: bool,
     _phantom: PhantomData<(Depth, Action)>,
 }
 
-enum Action { Move, Turn, QuarterTurn }
-
-impl<D: Int, A: Packable> Book<D, A> {
+impl<D: Int, A: Packable + Into<Move>> Book<D, A> {
     fn open() -> io::Result<()> {
         todo!()
     }
@@ -40,9 +75,22 @@ impl<D: Int, A: Packable> Book<D, A> {
         todo!()
     }
 
-    fn get_format(&self) -> (usize, Action) {
+    fn get_format(&self) -> (usize, ActionType) {
         todo!()
     }
+
+    fn insert(&self, word: Word<A>, depth: D) -> io::Result<()> {
+        let key = as_bytes!(&word.current_state().cubelets);
+
+        self.inner.fetch_and_update(key, update_fn)?;
+        Ok(())
+    }
+}
+
+fn update_word<D: Int, A: >(prev: (D, Vec<A>), new: (D, Vec<A>)) -> (D, Vec<A>) {
+    todo!()
+    // let mut value = Borrow::<[u8]>::borrow(&depth.to_bytes()).to_vec();
+    // value.extend(as_bytes!(&word.actions));
 }
 
 trait Packable: Copy {
@@ -164,8 +212,8 @@ fn unpack<T: Packable>(bytes: &[u8]) -> Vec<T> {
 
 #[cfg(test)]
 mod tests {
-    #![allow(dead_code)]
     use super::*;
+    use crate::cubelet::Axis;
 
     // All of these tests should be of a length that requires padding at the end of the packed
     // version
@@ -219,5 +267,10 @@ mod tests {
         let input = vec![Rotation::X, Rotation::XY3, Rotation::Z2, Rotation::Y3, Rotation::X3Z3];
         let output = unpack(&pack(&input));
         assert_eq!(input, output);
+    }
+
+    #[test]
+    fn test_create_book() {
+        todo!()
     }
 }

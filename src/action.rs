@@ -8,7 +8,10 @@ use std::{
     str::FromStr,
 };
 
-use crate::cubelet::Axis;
+use crate::{cube::{Cube, Position}, cubelet::Axis};
+
+#[derive(Debug)]
+pub(crate) enum ActionType { Move, Turn, QuarterTurn }
 
 /// Number of turns on the most negative face, number of turns on the most positive face,
 /// and the axis on which the turns happen
@@ -223,6 +226,26 @@ impl QuarterTurn {
     const ALL: [Self; 12] = [Self::L, Self::L3, Self::R, Self::R3, Self::U, Self::U3, Self::D, Self::D3, Self::F, Self::F3, Self::B, Self::B3];
 }
 
-struct Word<T> {
-    seq: Vec<T>
+pub struct Word<T> {
+    pub(crate) cubes: Vec<Cube<Position>>,
+    pub(crate) actions: Vec<T>
+}
+
+pub struct StatefulWord<T> {
+}
+
+impl<T: Into<Move> + Clone> Word<T> {
+    pub fn new() -> Self {
+        Word { cubes: vec![Cube::default()], actions: vec![] }
+    }
+
+    pub fn make_move(&mut self, action: T) {
+        let m: Move = action.clone().into();
+        self.actions.push(action);
+        self.cubes.push(self.current_state().make_move(m))
+    }
+
+    pub fn current_state(&self) -> &Cube {
+
+    }
 }

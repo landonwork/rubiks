@@ -11,8 +11,8 @@ pub mod view;
 
 #[macro_export]
 macro_rules! as_bytes {
-    ($reference:expr) => {
+    ($reference:expr) => { {
         let ptr: *const _ = $reference;
         unsafe { std::slice::from_raw_parts(ptr.cast(), std::mem::size_of()) }
-    }
+    } }
 }
