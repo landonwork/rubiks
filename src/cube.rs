@@ -21,11 +21,11 @@ pub struct Cube<T: SortBy> {
 pub(crate) trait SortBy {}
 
 #[derive(Clone, Debug, Default, PartialEq, Eq, Hash)]
-pub(crate) struct Position;
+pub struct Position;
 impl SortBy for Position {}
 
 #[derive(Clone, Debug, Default, PartialEq, Eq, Hash)]
-pub(crate) struct Id;
+pub struct Id;
 impl SortBy for Id {}
 
 impl<T: SortBy> Display for Cube<T> {
@@ -256,7 +256,8 @@ impl Cube<Position> {
         }
     }
 
-    pub fn make_move(self, Move(axis, rot1, rot2): Move) -> Self {
+    pub fn make_move(self, action: impl Into<Move>) -> Self {
+        let Move(axis, rot1, rot2) = action.into();
         let rot1: Rotation = (rot1, axis).into();
         let rot2: Rotation = (rot2, axis).into();
 
@@ -307,15 +308,9 @@ impl<T: SortBy> Cube<T> {
     pub fn new(cubelets: [Rotation; 20]) -> Self {
         Self { cubelets, _phantom: PhantomData }
     }
-
-    pub fn parity(&self) -> u8 {
-        self.cubelets.iter().map(|r| r.len()).sum()
-    }
 }
 
-// Add all feasible paths to the Vec `paths`
-// struct CubePath
-// to be replaced with a Word
+// struct CubePath to be replaced with a Word and CubeWordPair
 
 #[cfg(test)]
 mod tests {
@@ -323,6 +318,7 @@ mod tests {
     fn test_move_back_and_forth() {
         use rand::{thread_rng, Rng};
         use super::*;
+        use crate::action::Action;
 
         let mut cube = Cube::default();
         let cube = &mut cube;

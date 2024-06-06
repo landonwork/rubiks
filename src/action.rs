@@ -8,16 +8,23 @@ use std::{
     str::FromStr,
 };
 
-use crate::{cube::{Cube, Position}, cubelet::Axis};
+use crate::cubelet::Axis;
+
+pub(crate) trait Action: Clone + Copy + PartialEq + Eq {
+    fn inverse(&self) -> Self;
+    fn reduce(left: &Self, right: &Self) -> Option<Self>;
+}
 
 #[derive(Debug)]
 pub(crate) enum ActionType { Move, Turn, QuarterTurn }
 
 /// Number of turns on the most negative face, number of turns on the most positive face,
 /// and the axis on which the turns happen
-#[derive(Clone, Copy, Debug, Hash)]
+#[derive(Clone, Copy, Debug)]
 pub struct Move(pub Axis, pub u8, pub u8);
 
+// Necessary because Move is not an enum and there is a valid neutral action (though it is not
+// included in the ALL associated constant).
 impl PartialEq for Move {
     fn eq(&self, other: &Self) -> bool {
         (self.1 == 0 && self.2 == 0 && other.1 == 0 && other.2 == 0)
@@ -60,6 +67,21 @@ impl FromStr for Move {
     }
 }
 
+impl Action for Move {
+    fn inverse(&self) -> Self {
+        let Move(axis, rot1, rot2) = self;
+        Move(*axis, (4 - rot1) % 4, (4 - rot2) % 4)
+    }
+
+    fn reduce(left: &Self, right: &Self) -> Option<Self> {
+        (left.0 == right.0).then_some(Move(
+            left.0,
+            (left.1 + right.1) % 4,
+            (left.2 + right.2) % 4,
+        ))
+    }
+}
+
 impl Move {
     pub const ALL: [Move; 45] = {
         let mut i = 0;
@@ -93,13 +115,11 @@ impl Move {
     pub const X: [Move; 15] = Self::axis_moves(Axis::X);
     pub const Y: [Move; 15] = Self::axis_moves(Axis::Y);
     pub const Z: [Move; 15] = Self::axis_moves(Axis::Z);
-
-    pub fn inverse(self) -> Self {
-        let Move(axis, rot1, rot2) = self;
-        Move(axis, (4 - rot1) % 4, (4 - rot2) % 4)
-    }
 }
 
+// Questioning my choices using enums here because Move is not so what's the point?
+// I would love to see some sort of type mapping, so I could say "here is a set of elements; they map
+// directly to this subset of this type".
 #[derive(Copy, Clone, PartialEq, Eq, Debug)]
 #[repr(u8)]
 pub enum Turn {
@@ -165,6 +185,50 @@ impl Display for Turn {
     }
 }
 
+impl Action for Turn {
+    fn inverse(&self) -> Self {
+        match self {
+            Self::L => Self::L3,
+            Self::L3 => Self::L,
+            Self::R => Self::R3,
+            Self::R3 => Self::R,
+            Self::U => Self::U3,
+            Self::U3 => Self::U,
+            Self::D => Self::D3,
+            Self::D3 => Self::D,
+            Self::F => Self::F3,
+            Self::F3 => Self::F,
+            Self::B => Self::B3,
+            Self::B3 => Self::B,
+            double => *double
+        }
+    }
+
+    fn reduce(left: &Self, right: &Self) -> Option<Self> {
+        match (left, right) {
+            (Self::L2, Self::L3) | (Self::L3, Self::L2) => Some(Self::L),
+            (Self::L, Self::L) | (Self::L3, Self::L3) => Some(Self::L2),
+            (Self::L2, Self::L) | (Self::L, Self::L2) => Some(Self::L3),
+            (Self::R2, Self::R3) | (Self::R3, Self::R2) => Some(Self::R),
+            (Self::R, Self::R) | (Self::R3, Self::R3) => Some(Self::R2),
+            (Self::R2, Self::R) | (Self::R, Self::R2) => Some(Self::R3),
+            (Self::F2, Self::F3) | (Self::F3, Self::F2) => Some(Self::F),
+            (Self::F, Self::F) | (Self::F3, Self::F3) => Some(Self::F2),
+            (Self::F2, Self::F) | (Self::F, Self::F2) => Some(Self::F3),
+            (Self::B2, Self::B3) | (Self::B3, Self::B2) => Some(Self::B),
+            (Self::B, Self::B) | (Self::B3, Self::B3) => Some(Self::B2),
+            (Self::B2, Self::B) | (Self::B, Self::B2) => Some(Self::B3),
+            (Self::D2, Self::D3) | (Self::D3, Self::D2) => Some(Self::D),
+            (Self::D, Self::D) | (Self::D3, Self::D3) => Some(Self::D2),
+            (Self::D2, Self::D) | (Self::D, Self::D2) => Some(Self::D3),
+            (Self::U2, Self::U3) | (Self::U3, Self::U2) => Some(Self::U),
+            (Self::U, Self::U) | (Self::U3, Self::U3) => Some(Self::U2),
+            (Self::U2, Self::U) | (Self::U, Self::U2) => Some(Self::U3),
+            _inverses => unreachable!()
+        }
+    }
+}
+
 impl Turn {
     const ALL: [Self; 18] = [Self::L, Self::L2, Self::L3, Self::R, Self::R2, Self::R3, Self::U, Self::U2, Self::U3, Self::D, Self::D2, Self::D3, Self::F, Self::F2, Self::F3, Self::B, Self::B2, Self::B3];
 }
@@ -222,30 +286,31 @@ impl Display for QuarterTurn {
     }
 }
 
+// This setup actually doesn't work great for quarter turns. Aside from a pair of inverses, you can
+// also reduce 3 or 4 of the same turn in a row.
+impl Action for QuarterTurn {
+    fn inverse(&self) -> Self {
+        match self {
+            Self::L => Self::L3,
+            Self::L3 => Self::L,
+            Self::R => Self::R3,
+            Self::R3 => Self::R,
+            Self::U => Self::U3,
+            Self::U3 => Self::U,
+            Self::D => Self::D3,
+            Self::D3 => Self::D,
+            Self::F => Self::F3,
+            Self::F3 => Self::F,
+            Self::B => Self::B3,
+            Self::B3 => Self::B,
+        }
+    }
+
+    fn reduce(_left: &Self, _right: &Self) -> Option<Self> {
+        None
+    }
+}
+
 impl QuarterTurn {
     const ALL: [Self; 12] = [Self::L, Self::L3, Self::R, Self::R3, Self::U, Self::U3, Self::D, Self::D3, Self::F, Self::F3, Self::B, Self::B3];
-}
-
-pub struct Word<T> {
-    pub(crate) cubes: Vec<Cube<Position>>,
-    pub(crate) actions: Vec<T>
-}
-
-pub struct StatefulWord<T> {
-}
-
-impl<T: Into<Move> + Clone> Word<T> {
-    pub fn new() -> Self {
-        Word { cubes: vec![Cube::default()], actions: vec![] }
-    }
-
-    pub fn make_move(&mut self, action: T) {
-        let m: Move = action.clone().into();
-        self.actions.push(action);
-        self.cubes.push(self.current_state().make_move(m))
-    }
-
-    pub fn current_state(&self) -> &Cube {
-
-    }
 }

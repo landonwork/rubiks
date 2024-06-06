@@ -12,7 +12,7 @@ use rubiks::{
     cube::{Cube, self},
     cubelet::{Cubelet, Rotation, Axis},
     view::DisplayCube,
-    strategy::{MultiTree, PartialTree, Tree, Strategy, Cycle},
+    // strategy::{MultiTree, PartialTree, Tree, Strategy, Cycle},
     book::Book
 };
 

@@ -238,12 +238,9 @@ impl Rotation {
             let mut j = 0;
 
             while j < 24 {
-                match a.compose(Self::VARIANTS[j]) {
-                    Self::Neutral => {
-                        arr[i] = Self::VARIANTS[j];
-                        break;
-                    }
-                    _ => {}
+                if matches!(a.compose(Self::VARIANTS[j]), Self::Neutral) {
+                    arr[i] = Self::VARIANTS[j];
+                    break;
                 }
                 j += 24;
             }
@@ -260,17 +257,6 @@ impl Rotation {
 
     pub const fn difference(self, other: Self) -> Self {
         self.inverse().compose(other)
-    }
-
-    /// Number of Rubiks' cube actions it would take to get from Neutral to that rotation.
-    /// TODO: This is too simple for the edge cubelets for which we would need to know position and
-    /// not just rotation.
-    pub const fn len(&self) -> u8 {
-        match self {
-            Self::Neutral => 0,
-            Self::X | Self::X2 | Self::X3 | Self::Y | Self::Y2 | Self::Y3 | Self::Z | Self::Z2 | Self::Z3 => 1,
-            _ => 2,
-        }
     }
 
     // /// Find the rotation that when right-multiplied with the left operand,
@@ -394,9 +380,7 @@ impl Cubelet {
     /// TODO: Assert that the facelets cannot be opposing sides
     pub fn from_two_facelets(pair1: FacePair, pair2: FacePair) -> Self {
         let mut ind = 0;
-        let mut iter = CUBELET_PAIRS.iter().enumerate();
-        for (i, cubelet_pairs) in iter {
-        // for (i, cubelet_pairs) in CUBELET_PAIRS.iter().enumerate() {
+        for (i, cubelet_pairs) in CUBELET_PAIRS.iter().enumerate() {
            if cubelet_pairs.0.contains(&pair1) && cubelet_pairs.0.contains(&pair2) {
                 ind = i;
                 break;

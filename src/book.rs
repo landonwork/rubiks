@@ -1,15 +1,20 @@
 //! A construct that represents accumulated knowledge of the Rubik's cube group. This will be the
 //! starting point for creating a training dataset for an agent.
 
-use std::{borrow::Borrow, io, marker::PhantomData};
+use std::{borrow::Borrow, cmp::PartialOrd, io, marker::PhantomData};
 
 use sled::{self, Db, Tree};
 
 use crate::{
-    action::{Move, Turn, QuarterTurn, Word},
+    action::{Action, ActionType, Move, QuarterTurn, Turn},
+    cube::{Cube, Position},
     cubelet::Rotation,
-    as_bytes
 };
+
+fn as_bytes<T>(slice: &[T]) -> &[u8] {
+    let ptr: *const _ = slice;
+    unsafe { std::slice::from_raw_parts(ptr.cast(), std::mem::size_of::<T>()) }
+}
 
 trait Int {
     type ToBytes: Borrow<[u8]>;
@@ -67,30 +72,43 @@ pub struct Book<Depth = u16, Action = Turn> {
 }
 
 impl<D: Int, A: Packable + Into<Move>> Book<D, A> {
-    fn open() -> io::Result<()> {
-        todo!()
+    fn open(file_path: &str) -> io::Result<Self> {
+        let db = sled::open(file_path)?;
+        if !db.was_recovered() {
+            let _ = std::fs::remove_dir_all(file_path);
+            return Err(io::Error::new(io::ErrorKind::NotFound, file_path.to_owned()));
+        }
+
+        let inner = db.open_tree(b"book")?;
+        Ok(Book { db, inner, _phantom: PhantomData })
     }
 
-    fn create() -> io::Result<()> {
-        todo!()
+    fn create(file_path: &str) -> io::Result<Self> {
+        let db = sled::open(file_path)?;
+        if db.was_recovered() { return Err(io::Error::new(io::ErrorKind::AlreadyExists, file_path.to_owned())); }
+
+        let inner = db.open_tree(b"book")?;
+        Ok(Book { db, inner, _phantom: PhantomData })
     }
 
     fn get_format(&self) -> (usize, ActionType) {
         todo!()
     }
 
-    fn insert(&self, word: Word<A>, depth: D) -> io::Result<()> {
-        let key = as_bytes!(&word.current_state().cubelets);
+    fn insert(&self, pair: CubeWordPair<A>, depth: D) -> io::Result<()> {
+        let key = as_bytes(&pair.current_state().cubelets);
 
-        self.inner.fetch_and_update(key, update_fn)?;
-        Ok(())
+        // let update_fn = |_| -> Option<Vec<u8>> { todo!() };
+        // self.inner.fetch_and_update(key, update_fn)?;
+        // Ok(())
+        todo!()
     }
 }
 
 fn update_word<D: Int, A: >(prev: (D, Vec<A>), new: (D, Vec<A>)) -> (D, Vec<A>) {
     todo!()
     // let mut value = Borrow::<[u8]>::borrow(&depth.to_bytes()).to_vec();
-    // value.extend(as_bytes!(&word.actions));
+    // value.extend(as_bytes(&word.actions));
 }
 
 trait Packable: Copy {
@@ -210,6 +228,85 @@ fn unpack<T: Packable>(bytes: &[u8]) -> Vec<T> {
 }
 
 
+#[derive(Clone, PartialEq, Eq)]
+pub struct Word<T> {
+    actions: Vec<T>
+}
+
+impl<T> Default for Word<T> {
+    fn default() -> Self {
+        Self { actions: vec![] }
+    }
+}
+
+// My way of enforcing normal form in the book, or the "most" normal form
+impl<T: Eq> PartialOrd for Word<T> {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        self.actions.len().partial_cmp(&other.actions.len())
+    }
+}
+
+impl<T: Action> Word<T> {
+    fn reduce(&self) -> Self {
+        if self.actions.is_empty() {
+            Self::default()
+        } else {
+            let mut i = 0;
+            let mut n = self.actions.len();
+            let mut this = self.clone();
+
+            while i < n {
+                if this.actions[i] == this.actions[i+1].inverse() {
+                    this.actions.remove(i);
+                    this.actions.remove(i);
+                    i = i.saturating_sub(1);
+                    n -= 2;
+                } else if let Some(reduced) = T::reduce(&this.actions[i], &this.actions[i+1]) {
+                    this.actions.remove(i);
+                    this.actions[i] = reduced;
+                    n -= 1;
+                } else {
+                    i += 1;
+                }
+            }
+
+            this
+        }
+    }
+}
+
+/// Let's say that the word stays reduced
+pub struct CubeWordPair<T> {
+    cubes: Vec<Cube<Position>>,
+    word: Word<T>,
+}
+
+impl<T: Into<Move> + Clone> CubeWordPair<T> {
+    pub fn new() -> Self {
+        Self { cubes: vec![Cube::default()], word: Word::default() }
+    }
+
+    pub fn make_move(&mut self, action: T) {
+        let m: Move = action.clone().into();
+        self.word.actions.push(action);
+        self.cubes.push(self.current_state().clone().make_move(m))
+    }
+
+    // pub fn undo_move(&mut self) {
+    // }
+
+    pub fn pop(&mut self) {
+        if !self.word.actions.is_empty() {
+            self.cubes.pop();
+            self.word.actions.pop();
+        }
+    }
+
+    pub fn current_state(&self) -> &Cube<Position> {
+        self.cubes.last().unwrap()
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -270,7 +367,20 @@ mod tests {
     }
 
     #[test]
-    fn test_create_book() {
-        todo!()
+    fn test_create_and_open_book() {
+        const NAME: &str = "test_create_book";
+        let _ = std::fs::remove_dir_all(NAME);
+
+        let res1: Result<Book<u16, Move>, _> = Book::open(NAME);
+        assert!(res1.is_err());
+        assert!(!std::path::Path::new(NAME).exists());
+
+        let new_book: Book<u16, Move> = Book::create(NAME).unwrap();
+        let res2: Result<Book<u16, Move>, _> = Book::create(NAME);
+        assert!(res2.is_err());
+
+        drop(new_book);
+        let _ = std::fs::remove_dir_all(NAME);
+        assert!(!std::path::Path::new(NAME).exists());
     }
 }
