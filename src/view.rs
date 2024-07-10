@@ -1,11 +1,11 @@
 // I want to put wrappers here that will change the way different things are formatted to strings
 use std::fmt::Display;
 
-use crate::cube::{Cube, SortBy, index};
+use crate::cube::{Cube, index};
 
-pub struct DisplayCube<T: SortBy>(pub Cube<T>);
+pub struct DisplayCube<T>(pub Cube<T>);
 
-impl<T: SortBy> Display for DisplayCube<T> {
+impl<T> Display for DisplayCube<T> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let c = &self.0.cubelets;
         writeln!(

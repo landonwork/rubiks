@@ -13,12 +13,12 @@ use crate::{
 /// Cubelets are ordered by position or ID, meaning ordered by beginning position.
 /// You can see this in the `coords` and `index` functions.
 #[derive(Clone, Debug, Default, PartialEq, Eq, Hash)]
-pub struct Cube<T: SortBy> {
-    pub cubelets: [Rotation; 20],
+pub struct Cube<T> {
+    pub(crate) cubelets: [Rotation; 20],
     _phantom: PhantomData<T>
 }
 
-pub(crate) trait SortBy {}
+pub trait SortBy {}
 
 #[derive(Clone, Debug, Default, PartialEq, Eq, Hash)]
 pub struct Position;
@@ -240,7 +240,11 @@ pub fn shift_backward(cubelets: &[Rotation; 20], mutations: &[Rotation; 20]) -> 
 }
 
 impl Cube<Position> {
-    fn turn_face<const FACE: usize>(self, rot: Rotation) -> Self {
+    pub fn solved() -> Self {
+        Cube::new([Rotation::Neutral; 20])
+    }
+
+    pub fn turn_face<const FACE: usize>(self, rot: Rotation) -> Self {
         if rot == Rotation::Neutral { self } else {
             debug_assert!(FACE == 0 || FACE == 2, "{FACE}");
             let ind = (rot as u8) as usize - 1;
@@ -309,8 +313,6 @@ impl<T: SortBy> Cube<T> {
         Self { cubelets, _phantom: PhantomData }
     }
 }
-
-// struct CubePath to be replaced with a Word and CubeWordPair
 
 #[cfg(test)]
 mod tests {

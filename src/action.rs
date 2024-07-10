@@ -10,9 +10,10 @@ use std::{
 
 use crate::cubelet::Axis;
 
-pub(crate) trait Action: Clone + Copy + PartialEq + Eq {
+pub trait Action: Clone + Copy + PartialEq + Eq + Sized + Into<Move> + Display + 'static {
+    const ALL: &'static [Self];
     fn inverse(&self) -> Self;
-    fn reduce(left: &Self, right: &Self) -> Option<Self>;
+    fn from_move(m: Move) -> Vec<Self>;
 }
 
 #[derive(Debug)]
@@ -68,22 +69,20 @@ impl FromStr for Move {
 }
 
 impl Action for Move {
+    const ALL: &'static [Self] = Self::ALL_.as_slice();
+
     fn inverse(&self) -> Self {
         let Move(axis, rot1, rot2) = self;
         Move(*axis, (4 - rot1) % 4, (4 - rot2) % 4)
     }
 
-    fn reduce(left: &Self, right: &Self) -> Option<Self> {
-        (left.0 == right.0).then_some(Move(
-            left.0,
-            (left.1 + right.1) % 4,
-            (left.2 + right.2) % 4,
-        ))
+    fn from_move(m: Move) -> Vec<Self> {
+        vec![m]
     }
 }
 
 impl Move {
-    pub const ALL: [Move; 45] = {
+    const ALL_: [Move; 45] = {
         let mut i = 0;
         let mut res = [Move(Axis::X, 0, 0); 45];
         while i < 4 {
@@ -186,6 +185,8 @@ impl Display for Turn {
 }
 
 impl Action for Turn {
+    const ALL: &'static [Self] = Self::ALL_.as_slice();
+
     fn inverse(&self) -> Self {
         match self {
             Self::L => Self::L3,
@@ -204,33 +205,72 @@ impl Action for Turn {
         }
     }
 
-    fn reduce(left: &Self, right: &Self) -> Option<Self> {
-        match (left, right) {
-            (Self::L2, Self::L3) | (Self::L3, Self::L2) => Some(Self::L),
-            (Self::L, Self::L) | (Self::L3, Self::L3) => Some(Self::L2),
-            (Self::L2, Self::L) | (Self::L, Self::L2) => Some(Self::L3),
-            (Self::R2, Self::R3) | (Self::R3, Self::R2) => Some(Self::R),
-            (Self::R, Self::R) | (Self::R3, Self::R3) => Some(Self::R2),
-            (Self::R2, Self::R) | (Self::R, Self::R2) => Some(Self::R3),
-            (Self::F2, Self::F3) | (Self::F3, Self::F2) => Some(Self::F),
-            (Self::F, Self::F) | (Self::F3, Self::F3) => Some(Self::F2),
-            (Self::F2, Self::F) | (Self::F, Self::F2) => Some(Self::F3),
-            (Self::B2, Self::B3) | (Self::B3, Self::B2) => Some(Self::B),
-            (Self::B, Self::B) | (Self::B3, Self::B3) => Some(Self::B2),
-            (Self::B2, Self::B) | (Self::B, Self::B2) => Some(Self::B3),
-            (Self::D2, Self::D3) | (Self::D3, Self::D2) => Some(Self::D),
-            (Self::D, Self::D) | (Self::D3, Self::D3) => Some(Self::D2),
-            (Self::D2, Self::D) | (Self::D, Self::D2) => Some(Self::D3),
-            (Self::U2, Self::U3) | (Self::U3, Self::U2) => Some(Self::U),
-            (Self::U, Self::U) | (Self::U3, Self::U3) => Some(Self::U2),
-            (Self::U2, Self::U) | (Self::U, Self::U2) => Some(Self::U3),
-            _inverses => unreachable!()
+    fn from_move(m: Move) -> Vec<Self> {
+        match m {
+            Move(Axis::X, 0, 1) => vec![Self::R3],
+            Move(Axis::X, 0, 2) => vec![Self::R2],
+            Move(Axis::X, 0, 3) => vec![Self::R],
+
+            Move(Axis::X, 1, 0) => vec![Self::L],
+            Move(Axis::X, 1, 1) => vec![Self::L, Self::R3],
+            Move(Axis::X, 1, 2) => vec![Self::L, Self::R2],
+            Move(Axis::X, 1, 3) => vec![Self::L, Self::R],
+
+            Move(Axis::X, 2, 0) => vec![Self::L2],
+            Move(Axis::X, 2, 1) => vec![Self::L2, Self::R3],
+            Move(Axis::X, 2, 2) => vec![Self::L2, Self::R2],
+            Move(Axis::X, 2, 3) => vec![Self::L2, Self::R],
+
+            Move(Axis::X, 3, 0) => vec![Self::L3],
+            Move(Axis::X, 3, 1) => vec![Self::L3, Self::R3],
+            Move(Axis::X, 3, 2) => vec![Self::L3, Self::R2],
+            Move(Axis::X, 3, 3) => vec![Self::L3, Self::R],
+
+            Move(Axis::Y, 0, 1) => vec![Self::B3],
+            Move(Axis::Y, 0, 2) => vec![Self::B2],
+            Move(Axis::Y, 0, 3) => vec![Self::B],
+
+            Move(Axis::Y, 1, 0) => vec![Self::F],
+            Move(Axis::Y, 1, 1) => vec![Self::F, Self::B3],
+            Move(Axis::Y, 1, 2) => vec![Self::F, Self::B2],
+            Move(Axis::Y, 1, 3) => vec![Self::F, Self::B],
+
+            Move(Axis::Y, 2, 0) => vec![Self::F2],
+            Move(Axis::Y, 2, 1) => vec![Self::F2, Self::B3],
+            Move(Axis::Y, 2, 2) => vec![Self::F2, Self::B2],
+            Move(Axis::Y, 2, 3) => vec![Self::F2, Self::B],
+
+            Move(Axis::Y, 3, 0) => vec![Self::F3],
+            Move(Axis::Y, 3, 1) => vec![Self::F3, Self::B3],
+            Move(Axis::Y, 3, 2) => vec![Self::F3, Self::B2],
+            Move(Axis::Y, 3, 3) => vec![Self::F3, Self::B],
+
+            Move(Axis::Z, 0, 1) => vec![Self::U3],
+            Move(Axis::Z, 0, 2) => vec![Self::U2],
+            Move(Axis::Z, 0, 3) => vec![Self::U],
+
+            Move(Axis::Z, 1, 0) => vec![Self::D],
+            Move(Axis::Z, 1, 1) => vec![Self::D, Self::U3],
+            Move(Axis::Z, 1, 2) => vec![Self::D, Self::U2],
+            Move(Axis::Z, 1, 3) => vec![Self::D, Self::U],
+
+            Move(Axis::Z, 2, 0) => vec![Self::D2],
+            Move(Axis::Z, 2, 1) => vec![Self::D2, Self::U3],
+            Move(Axis::Z, 2, 2) => vec![Self::D2, Self::U2],
+            Move(Axis::Z, 2, 3) => vec![Self::D2, Self::U],
+
+            Move(Axis::Z, 3, 0) => vec![Self::D3],
+            Move(Axis::Z, 3, 1) => vec![Self::D3, Self::U3],
+            Move(Axis::Z, 3, 2) => vec![Self::D3, Self::U2],
+            Move(Axis::Z, 3, 3) => vec![Self::D3, Self::U],
+
+            _ => unreachable!(),
         }
     }
 }
 
 impl Turn {
-    const ALL: [Self; 18] = [Self::L, Self::L2, Self::L3, Self::R, Self::R2, Self::R3, Self::U, Self::U2, Self::U3, Self::D, Self::D2, Self::D3, Self::F, Self::F2, Self::F3, Self::B, Self::B2, Self::B3];
+    const ALL_: [Self; 18] = [Self::L, Self::L2, Self::L3, Self::R, Self::R2, Self::R3, Self::U, Self::U2, Self::U3, Self::D, Self::D2, Self::D3, Self::F, Self::F2, Self::F3, Self::B, Self::B2, Self::B3];
 }
 
 #[derive(Copy, Clone, PartialEq, Eq, Debug)]
@@ -286,9 +326,9 @@ impl Display for QuarterTurn {
     }
 }
 
-// This setup actually doesn't work great for quarter turns. Aside from a pair of inverses, you can
-// also reduce 3 or 4 of the same turn in a row.
 impl Action for QuarterTurn {
+    const ALL: &'static [Self] = Self::ALL_;
+
     fn inverse(&self) -> Self {
         match self {
             Self::L => Self::L3,
@@ -306,11 +346,70 @@ impl Action for QuarterTurn {
         }
     }
 
-    fn reduce(_left: &Self, _right: &Self) -> Option<Self> {
-        None
+    fn from_move(m: Move) -> Vec<Self> {
+        match m {
+            Move(Axis::X, 0, 1) => vec![Self::R3],
+            Move(Axis::X, 0, 2) => vec![Self::R, Self::R],
+            Move(Axis::X, 0, 3) => vec![Self::R],
+
+            Move(Axis::X, 1, 0) => vec![Self::L],
+            Move(Axis::X, 1, 1) => vec![Self::L, Self::R3],
+            Move(Axis::X, 1, 2) => vec![Self::L, Self::R, Self::R],
+            Move(Axis::X, 1, 3) => vec![Self::L, Self::R],
+
+            Move(Axis::X, 2, 0) => vec![Self::L, Self::L],
+            Move(Axis::X, 2, 1) => vec![Self::L, Self::L, Self::R3],
+            Move(Axis::X, 2, 2) => vec![Self::L, Self::L, Self::R, Self::R],
+            Move(Axis::X, 2, 3) => vec![Self::L, Self::L, Self::R],
+
+            Move(Axis::X, 3, 0) => vec![Self::L3],
+            Move(Axis::X, 3, 1) => vec![Self::L3, Self::R3],
+            Move(Axis::X, 3, 2) => vec![Self::L3, Self::R, Self::R],
+            Move(Axis::X, 3, 3) => vec![Self::L3, Self::R],
+
+            Move(Axis::Y, 0, 1) => vec![Self::B3],
+            Move(Axis::Y, 0, 2) => vec![Self::B, Self::B],
+            Move(Axis::Y, 0, 3) => vec![Self::B],
+
+            Move(Axis::Y, 1, 0) => vec![Self::F],
+            Move(Axis::Y, 1, 1) => vec![Self::F, Self::B3],
+            Move(Axis::Y, 1, 2) => vec![Self::F, Self::B, Self::B],
+            Move(Axis::Y, 1, 3) => vec![Self::F, Self::B],
+
+            Move(Axis::Y, 2, 0) => vec![Self::F, Self::F],
+            Move(Axis::Y, 2, 1) => vec![Self::F, Self::F, Self::B3],
+            Move(Axis::Y, 2, 2) => vec![Self::F, Self::F, Self::B, Self::B],
+            Move(Axis::Y, 2, 3) => vec![Self::F, Self::F, Self::B],
+
+            Move(Axis::Y, 3, 0) => vec![Self::F3],
+            Move(Axis::Y, 3, 1) => vec![Self::F3, Self::B3],
+            Move(Axis::Y, 3, 2) => vec![Self::F3, Self::B, Self::B],
+            Move(Axis::Y, 3, 3) => vec![Self::F3, Self::B],
+
+            Move(Axis::Z, 0, 1) => vec![Self::U3],
+            Move(Axis::Z, 0, 2) => vec![Self::U, Self::U],
+            Move(Axis::Z, 0, 3) => vec![Self::U],
+
+            Move(Axis::Z, 1, 0) => vec![Self::D],
+            Move(Axis::Z, 1, 1) => vec![Self::D, Self::U3],
+            Move(Axis::Z, 1, 2) => vec![Self::D, Self::U, Self::U],
+            Move(Axis::Z, 1, 3) => vec![Self::D, Self::U],
+
+            Move(Axis::Z, 2, 0) => vec![Self::D, Self::D],
+            Move(Axis::Z, 2, 1) => vec![Self::D, Self::D, Self::U3],
+            Move(Axis::Z, 2, 2) => vec![Self::D, Self::D, Self::U, Self::U],
+            Move(Axis::Z, 2, 3) => vec![Self::D, Self::D, Self::U],
+
+            Move(Axis::Z, 3, 0) => vec![Self::D3],
+            Move(Axis::Z, 3, 1) => vec![Self::D3, Self::U3],
+            Move(Axis::Z, 3, 2) => vec![Self::D3, Self::U, Self::U],
+            Move(Axis::Z, 3, 3) => vec![Self::D3, Self::U],
+
+            _ => unreachable!(),
+        }
     }
 }
 
 impl QuarterTurn {
-    const ALL: [Self; 12] = [Self::L, Self::L3, Self::R, Self::R3, Self::U, Self::U3, Self::D, Self::D3, Self::F, Self::F3, Self::B, Self::B3];
+    const ALL_: [Self; 12] = [Self::L, Self::L3, Self::R, Self::R3, Self::U, Self::U3, Self::D, Self::D3, Self::F, Self::F3, Self::B, Self::B3];
 }
