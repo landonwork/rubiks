@@ -1,14 +1,15 @@
 //! A construct that represents accumulated knowledge of the Rubik's cube group. This will be the
 //! starting point for creating a training dataset for an agent.
 
+#![allow(private_bounds)]
 use std::{borrow::Borrow, cmp::PartialOrd, io, marker::PhantomData};
 
 use sled::{self, Db, Tree};
 
 use crate::{
-    action::{Action, ActionType, Move, QuarterTurn, Turn},
-    cube::{Cube, Position},
+    action::{Action, Move, QuarterTurn, Turn},
     cubelet::Rotation,
+    word::Word
 };
 
 fn as_bytes<T>(slice: &[T]) -> &[u8] {
@@ -16,7 +17,7 @@ fn as_bytes<T>(slice: &[T]) -> &[u8] {
     unsafe { std::slice::from_raw_parts(ptr.cast(), std::mem::size_of::<T>()) }
 }
 
-trait Int {
+pub trait Int: PartialOrd + Copy {
     type ToBytes: Borrow<[u8]>;
     fn to_bytes(&self) -> Self::ToBytes;
     fn from_bytes(bytes: &[u8]) -> Self;
@@ -68,11 +69,16 @@ pub struct Book<Depth = u16, Action = Turn> {
     // Db struct included to have access to the size_on_disk method
     db: Db,
     inner: Tree,
+    // Depth: "this_books_depth_type"
+    // Action: "this_books_action_type"
     _phantom: PhantomData<(Depth, Action)>,
 }
 
+const DEPTH_ENTRY: &[u8] = b"this_books_depth_type";
+const ACTION_ENTRY: &[u8] = b"this_books_action_type";
+
 impl<D: Int, A: Packable + Into<Move>> Book<D, A> {
-    fn open(file_path: &str) -> io::Result<Self> {
+    pub fn open(file_path: &str) -> io::Result<Self> {
         let db = sled::open(file_path)?;
         if !db.was_recovered() {
             let _ = std::fs::remove_dir_all(file_path);
@@ -80,35 +86,86 @@ impl<D: Int, A: Packable + Into<Move>> Book<D, A> {
         }
 
         let inner = db.open_tree(b"book")?;
+
+        let depth_type = std::str::from_utf8(
+            inner.get(DEPTH_ENTRY)?
+                .ok_or(io::Error::new(io::ErrorKind::NotFound, "Opened book does not contain a depth type"))?
+                .as_ref()
+            )
+            .map_err(|_| io::Error::new(io::ErrorKind::InvalidData, "Invalid UTF-8 found in depth type entry"))?
+            .to_owned();
+        if std::str::from_utf8(depth_type.as_ref()).unwrap() != std::any::type_name::<D>() {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                format!(
+                    "Opened book has a different depth type: expected {}, got {}",
+                    std::any::type_name::<D>(),
+                    depth_type
+                )
+            ))
+        }
+
+        let action_type = std::str::from_utf8(
+            inner.get(ACTION_ENTRY)?
+                .ok_or(io::Error::new(io::ErrorKind::NotFound, "Opened book does not contain an action type"))?
+                .as_ref()
+            )
+            .map_err(|_| io::Error::new(io::ErrorKind::InvalidData, "Invalid UTF-8 found in action type entry"))?
+            .to_owned();
+        if std::str::from_utf8(action_type.as_ref()).unwrap() != std::any::type_name::<A>() {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                format!(
+                    "Opened book has a different action type: expected {}, got {}",
+                    std::any::type_name::<A>(),
+                    action_type
+                )
+            ))
+        }
+
         Ok(Book { db, inner, _phantom: PhantomData })
     }
 
-    fn create(file_path: &str) -> io::Result<Self> {
+    pub fn create(file_path: &str) -> io::Result<Self> {
         let db = sled::open(file_path)?;
         if db.was_recovered() { return Err(io::Error::new(io::ErrorKind::AlreadyExists, file_path.to_owned())); }
 
         let inner = db.open_tree(b"book")?;
+        inner.insert(DEPTH_ENTRY, std::any::type_name::<D>())?;
+        inner.insert(ACTION_ENTRY, std::any::type_name::<A>())?;
+
         Ok(Book { db, inner, _phantom: PhantomData })
     }
 
-    fn get_format(&self) -> (usize, ActionType) {
-        todo!()
+    pub fn insert(&self, word: Word<A>, depth: D) -> io::Result<Option<D>> {
+        // TODO: pack if packed; is packed part of the generics or is it a runtime setting?
+        // Probably the generics, right?
+        // let key = as_bytes(&pair.current_state().cubelets);
+        let key = pack(&word.cube.cubelets);
+
+        let update_fn = |slice: Option<&[u8]>| -> Option<Vec<u8>> {
+        let depth = if let Some(slice) = slice {
+                let current = D::from_bytes(slice);
+                if current < depth {
+                    depth
+                } else {
+                    current
+                }
+            } else {
+                depth
+            };
+
+            Some(depth.to_bytes().borrow().to_vec())
+        };
+
+        let previous = self.inner.fetch_and_update(key, update_fn)?;
+
+        Ok(previous.map(|ivec| D::from_bytes(ivec.as_ref())))
     }
 
-    fn insert(&self, pair: CubeWordPair<A>, depth: D) -> io::Result<()> {
-        let key = as_bytes(&pair.current_state().cubelets);
-
-        // let update_fn = |_| -> Option<Vec<u8>> { todo!() };
-        // self.inner.fetch_and_update(key, update_fn)?;
-        // Ok(())
-        todo!()
+    pub fn size(&self) -> io::Result<u64> {
+        Ok(self.db.size_on_disk()?)
     }
-}
-
-fn update_word<D: Int, A: >(prev: (D, Vec<A>), new: (D, Vec<A>)) -> (D, Vec<A>) {
-    todo!()
-    // let mut value = Borrow::<[u8]>::borrow(&depth.to_bytes()).to_vec();
-    // value.extend(as_bytes(&word.actions));
 }
 
 trait Packable: Copy {
@@ -227,85 +284,6 @@ fn unpack<T: Packable>(bytes: &[u8]) -> Vec<T> {
     new.into_iter().filter_map(T::from_byte).collect()
 }
 
-
-#[derive(Clone, PartialEq, Eq)]
-pub struct Word<T> {
-    actions: Vec<T>
-}
-
-impl<T> Default for Word<T> {
-    fn default() -> Self {
-        Self { actions: vec![] }
-    }
-}
-
-// My way of enforcing normal form in the book, or the "most" normal form
-impl<T: Eq> PartialOrd for Word<T> {
-    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
-        self.actions.len().partial_cmp(&other.actions.len())
-    }
-}
-
-impl<T: Action> Word<T> {
-    fn reduce(&self) -> Self {
-        if self.actions.is_empty() {
-            Self::default()
-        } else {
-            let mut i = 0;
-            let mut n = self.actions.len();
-            let mut this = self.clone();
-
-            while i < n {
-                if this.actions[i] == this.actions[i+1].inverse() {
-                    this.actions.remove(i);
-                    this.actions.remove(i);
-                    i = i.saturating_sub(1);
-                    n -= 2;
-                } else if let Some(reduced) = T::reduce(&this.actions[i], &this.actions[i+1]) {
-                    this.actions.remove(i);
-                    this.actions[i] = reduced;
-                    n -= 1;
-                } else {
-                    i += 1;
-                }
-            }
-
-            this
-        }
-    }
-}
-
-/// Let's say that the word stays reduced
-pub struct CubeWordPair<T> {
-    cubes: Vec<Cube<Position>>,
-    word: Word<T>,
-}
-
-impl<T: Into<Move> + Clone> CubeWordPair<T> {
-    pub fn new() -> Self {
-        Self { cubes: vec![Cube::default()], word: Word::default() }
-    }
-
-    pub fn make_move(&mut self, action: T) {
-        let m: Move = action.clone().into();
-        self.word.actions.push(action);
-        self.cubes.push(self.current_state().clone().make_move(m))
-    }
-
-    // pub fn undo_move(&mut self) {
-    // }
-
-    pub fn pop(&mut self) {
-        if !self.word.actions.is_empty() {
-            self.cubes.pop();
-            self.word.actions.pop();
-        }
-    }
-
-    pub fn current_state(&self) -> &Cube<Position> {
-        self.cubes.last().unwrap()
-    }
-}
 
 #[cfg(test)]
 mod tests {

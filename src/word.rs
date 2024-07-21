@@ -3,8 +3,8 @@ use crate::{Action, Move, Cube, Position};
 
 #[derive(Clone, Debug)]
 pub struct Word<T> {
-    actions: Vec<Move>,
-    cube: Cube<Position>,
+    pub actions: Vec<Move>,
+    pub cube: Cube<Position>,
     _phantom: PhantomData<T>,
 }
 

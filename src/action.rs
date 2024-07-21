@@ -327,7 +327,7 @@ impl Display for QuarterTurn {
 }
 
 impl Action for QuarterTurn {
-    const ALL: &'static [Self] = Self::ALL_;
+    const ALL: &'static [Self] = Self::ALL_.as_slice();
 
     fn inverse(&self) -> Self {
         match self {
