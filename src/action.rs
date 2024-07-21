@@ -16,8 +16,8 @@ pub trait Action: Clone + Copy + PartialEq + Eq + Sized + Into<Move> + Display +
     fn from_move(m: Move) -> Vec<Self>;
 }
 
-#[derive(Debug)]
-pub(crate) enum ActionType { Move, Turn, QuarterTurn }
+// #[derive(Debug)]
+// pub(crate) enum ActionType { Move, Turn, QuarterTurn }
 
 /// Number of turns on the most negative face, number of turns on the most positive face,
 /// and the axis on which the turns happen
@@ -114,6 +114,19 @@ impl Move {
     pub const X: [Move; 15] = Self::axis_moves(Axis::X);
     pub const Y: [Move; 15] = Self::axis_moves(Axis::Y);
     pub const Z: [Move; 15] = Self::axis_moves(Axis::Z);
+
+    pub fn reduce(m1: Move, m2: Move) -> (Option<Move>, Option<Move>) {
+        if m1.0 == m2.0 {
+            let left = Move(m1.0, (m1.1 + m2.1) % 4, (m1.2 + m2.2) % 4);
+            if left.1 == 0 && left.2 == 0 {
+                (None, None)
+            } else {
+                (Some(left), None)
+            }
+        } else {
+            (Some(m1), Some(m2))
+        }
+    }
 }
 
 // Questioning my choices using enums here because Move is not so what's the point?
