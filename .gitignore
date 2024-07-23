@@ -5,5 +5,4 @@ Cargo.lock
 .ipynb_checkpoints
 
 # data files
-*.store
-*.info
+books
