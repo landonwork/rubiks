@@ -1,3 +1,5 @@
+// TODO: change new to from_cubelets and make new default cube
+// TODO: Make to and from facelets methods
 use std::{
     array, 
     fmt::Display, 
@@ -330,7 +332,7 @@ mod tests {
 
         for m in Move::ALL {
             let inverse = m.inverse();
-            assert_eq!(cube.clone().make_move(m).make_move(inverse), *cube);
+            assert_eq!(cube.clone().make_move(*m).make_move(inverse), *cube);
         }
     }
 }

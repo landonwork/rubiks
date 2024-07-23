@@ -70,7 +70,7 @@ struct ThreadPool<T> {
 }
 
 impl<T: Send + 'static> ThreadPool<T> {
-    fn new() -> Self {
+    pub fn new() -> Self {
         let num_cpus = thread::available_parallelism().unwrap().get();
         let threads = (0..num_cpus).map(|_| None).collect();
         Self { threads }
