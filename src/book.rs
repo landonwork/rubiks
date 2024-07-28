@@ -2,7 +2,7 @@
 //! starting point for creating a training dataset for an agent.
 
 #![allow(private_bounds)]
-use std::{borrow::Borrow, cmp::PartialOrd, io, marker::PhantomData, ops::{Add, Sub}};
+use std::{borrow::Borrow, cmp::PartialOrd, io, marker::PhantomData, ops::Add};
 
 use sled::{self, Db, IVec, Tree};
 
@@ -78,8 +78,9 @@ impl Int for u32 {
     }
 }
 
-// I think we always store the cube as the key, followed by the depth (u8, u16, u32), followed by
-// the word (which has a variable length). There will be a special entry that records the format of
+
+// I think we always store the cube as the key, followed by the depth (u8, u16, u32).
+// There will be a special entry that records the format of
 // the Book. On opening an existing Book, it checks the data format and returns an error if the
 // format does not match the generics in the tree.
 #[derive(Clone)]
@@ -95,7 +96,7 @@ pub struct Book<Depth = u16, Action = Turn> {
 const DEPTH_ENTRY: &[u8] = b"this_books_depth_type";
 const ACTION_ENTRY: &[u8] = b"this_books_action_type";
 
-impl<D: Int + Add + Sub, A: Action + Packable + Into<Move>> Book<D, A> {
+impl<D: Int, A: Action + Packable> Book<D, A> {
     pub fn open(file_path: &str) -> io::Result<Self> {
         let db = sled::open(file_path)?;
         if !db.was_recovered() {
@@ -105,6 +106,7 @@ impl<D: Int + Add + Sub, A: Action + Packable + Into<Move>> Book<D, A> {
 
         let inner = db.open_tree(b"book")?;
 
+        // Check depth type
         let depth_type = std::str::from_utf8(
             inner.get(DEPTH_ENTRY)?
                 .ok_or(io::Error::new(io::ErrorKind::NotFound, "Opened book does not contain a depth type"))?
@@ -123,6 +125,7 @@ impl<D: Int + Add + Sub, A: Action + Packable + Into<Move>> Book<D, A> {
             ))
         }
 
+        // Check action type
         let action_type = std::str::from_utf8(
             inner.get(ACTION_ENTRY)?
                 .ok_or(io::Error::new(io::ErrorKind::NotFound, "Opened book does not contain an action type"))?
@@ -176,11 +179,9 @@ impl<D: Int + Add + Sub, A: Action + Packable + Into<Move>> Book<D, A> {
         let key = as_bytes(&cube.cubelets);
 
         let update_fn = |slice: Option<&[u8]>| -> Option<_> {
-            let depth = if let Some(slice) = slice {
-                std::cmp::min(D::from_bytes(slice), depth)
-            } else {
-                depth
-            };
+            let depth = slice
+                .map(|bytes| { std::cmp::min(D::from_bytes(bytes), depth) })
+                .unwrap_or(depth);
             Some(IVec::from(depth.to_bytes().borrow()))
         };
 
@@ -189,36 +190,34 @@ impl<D: Int + Add + Sub, A: Action + Packable + Into<Move>> Book<D, A> {
         Ok(previous.map(|ivec| D::from_bytes(ivec.as_ref())))
     }
 
-    pub fn update_cube(&self, cube: Cube<Position>, depth: D) -> io::Result<()> {
-        match self.insert_cube(&cube, depth) {
-            Ok(None) => Ok(()),
-            Ok(Some(old_depth)) if old_depth > depth  => {
+    /// Insert a cube into the book and if the previous recorded depth was overwritten,
+    /// update any neighbors if needed, and recurse.
+    pub fn update_cube(&self, cube: &Cube<Position>, depth: D) -> io::Result<()> {
+        match self.insert_cube(&cube, depth)? {
+            Some(old_depth) if old_depth > depth => {
                 match A::ALL.into_iter()
-                        .find_map(|m| {
-                            let new_cube = cube.clone().make_move(*m);
-                            let res = self.update_cube(new_cube, depth.increment());
-                            if res.is_err() {
-                                Some(res)
-                            } else {
-                                None
-                            }
-                        }) {
-                    Some(error) => error,
+                    .find_map(|m| {
+                        let new_cube = cube.clone().make_move(*m);
+                        self.update_cube(&new_cube, depth.increment()).err()
+                    })
+                {
+                    Some(error) => Err(error),
                     None => Ok(())
                 }
             }
-            Ok(Some(_old_depth)) => Ok(()),
-            Err(e) => Err(e),
+            Some(_old_depth) => Ok(()),
+            None => Ok(()),
         }
     }
 
+    /// Run update_cube for all cubes along the path of the given word.
     pub fn update_word(&self, word: Word<A>) -> io::Result<()> {
         let mut depth = D::ZERO;
         let mut cube = Cube::default();
         for action in word.as_actions() {
             cube = cube.make_move(action);
             depth = depth.increment();
-            self.update_cube(cube.clone(), depth)?;
+            self.update_cube(&cube, depth)?;
         }
         Ok(())
     }
@@ -227,6 +226,7 @@ impl<D: Int + Add + Sub, A: Action + Packable + Into<Move>> Book<D, A> {
         Ok(self.db.size_on_disk()?)
     }
 }
+
 
 trait Packable: Copy {
     const PACKED_BITS: usize;
