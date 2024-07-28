@@ -11,9 +11,7 @@ pub struct Word<T> {
 
 impl<T: Action> Display for Word<T> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let actions = self.actions.iter()
-            .flat_map(|&m| T::from_move(m))
-            .collect::<Vec<_>>();
+        let actions = self.as_actions();
         write!(f, "(")?;
         for (i, a) in actions.into_iter().enumerate() {
             if i == 0 {
@@ -39,6 +37,12 @@ impl<T: Action> Word<T> {
             cube: Cube::default(),
             _phantom: PhantomData
         }
+    }
+
+    pub fn as_actions(&self) -> Vec<T> {
+        self.actions.iter()
+            .flat_map(|&m| T::from_move(m))
+            .collect()
     }
 
     pub fn from_parts_unchecked(cube: Cube<Position>, actions: Vec<Move>) -> Self {

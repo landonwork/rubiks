@@ -2,14 +2,15 @@
 //! starting point for creating a training dataset for an agent.
 
 #![allow(private_bounds)]
-use std::{borrow::Borrow, cmp::PartialOrd, io, marker::PhantomData};
+use std::{borrow::Borrow, cmp::PartialOrd, io, marker::PhantomData, ops::{Add, Sub}};
 
-use sled::{self, Db, Tree};
+use sled::{self, Db, IVec, Tree};
 
 use crate::{
     action::{Action, Move, QuarterTurn, Turn},
     cubelet::Rotation,
-    word::Word
+    word::Word,
+    Cube, Position,
 };
 
 fn as_bytes<T>(slice: &[T]) -> &[u8] {
@@ -17,14 +18,17 @@ fn as_bytes<T>(slice: &[T]) -> &[u8] {
     unsafe { std::slice::from_raw_parts(ptr.cast(), std::mem::size_of::<T>()) }
 }
 
-pub trait Int: PartialOrd + Copy {
+pub trait Int: PartialOrd + Ord + Copy + Add<Self, Output=Self> {
     type ToBytes: Borrow<[u8]>;
+    const ZERO: Self;
     fn to_bytes(&self) -> Self::ToBytes;
     fn from_bytes(bytes: &[u8]) -> Self;
+    fn increment(self) -> Self;
 }
 
 impl Int for u8 {
     type ToBytes = [u8; 1];
+    const ZERO: Self = 0;
 
     fn to_bytes(&self) -> Self::ToBytes {
         self.to_le_bytes()
@@ -34,10 +38,15 @@ impl Int for u8 {
         debug_assert_eq!(bytes.len(), 1);
         bytes[0]
     }
+
+    fn increment(self) -> Self {
+        self + 1
+    }
 }
 
 impl Int for u16 {
     type ToBytes = [u8; 2];
+    const ZERO: Self = 0;
 
     fn to_bytes(&self) -> Self::ToBytes {
         self.to_le_bytes()
@@ -46,10 +55,15 @@ impl Int for u16 {
     fn from_bytes(bytes: &[u8]) -> Self {
         u16::from_le_bytes(bytes.try_into().unwrap())
     }
+
+    fn increment(self) -> Self {
+        self + 1
+    }
 }
 
 impl Int for u32 {
     type ToBytes = [u8; 4];
+    const ZERO: Self = 0;
 
     fn to_bytes(&self) -> Self::ToBytes {
         self.to_le_bytes()
@@ -57,6 +71,10 @@ impl Int for u32 {
 
     fn from_bytes(bytes: &[u8]) -> Self {
         u32::from_le_bytes(bytes.try_into().unwrap())
+    }
+
+    fn increment(self) -> Self {
+        self + 1
     }
 }
 
@@ -77,7 +95,7 @@ pub struct Book<Depth = u16, Action = Turn> {
 const DEPTH_ENTRY: &[u8] = b"this_books_depth_type";
 const ACTION_ENTRY: &[u8] = b"this_books_action_type";
 
-impl<D: Int, A: Packable + Into<Move>> Book<D, A> {
+impl<D: Int + Add + Sub, A: Action + Packable + Into<Move>> Book<D, A> {
     pub fn open(file_path: &str) -> io::Result<Self> {
         let db = sled::open(file_path)?;
         if !db.was_recovered() {
@@ -137,30 +155,72 @@ impl<D: Int, A: Packable + Into<Move>> Book<D, A> {
         Ok(Book { db, inner, _phantom: PhantomData })
     }
 
-    pub fn insert(&self, word: Word<A>, depth: D) -> io::Result<Option<D>> {
-        // TODO: pack if packed; is packed part of the generics or is it a runtime setting?
-        // Probably the generics, right?
-        // let key = as_bytes(&pair.current_state().cubelets);
-        let key = pack(&word.cube.cubelets);
+    pub fn contains(&self, cube: &Cube<Position>) -> io::Result<bool> {
+        Ok(self.inner.get(as_bytes(&cube.cubelets))?.is_some())
+    }
 
-        let update_fn = |slice: Option<&[u8]>| -> Option<Vec<u8>> {
-        let depth = if let Some(slice) = slice {
-                let current = D::from_bytes(slice);
-                if current < depth {
-                    depth
-                } else {
-                    current
-                }
+    pub fn get_depth(&self, cube: &Cube<Position>) -> io::Result<Option<D>> {
+        let depth = self.inner.get(as_bytes(&cube.cubelets))?;
+        Ok(depth.map(|ivec| D::from_bytes(ivec.as_ref())))
+    }
+
+    /// Insert a cube and a depth into the book. If the book has no record of the cube, the cube
+    /// and depth are inserted. If the book has an existing record, it is only replaced if the
+    /// passed depth is less than the existing depth. The existing depth is returned if there is
+    /// one.
+    pub fn insert_cube(&self, cube: &Cube<Position>, depth: D) -> io::Result<Option<D>> {
+        // TODO: pack if packed; is packed part of the generics or is it a runtime setting?
+        // Probably the generics, right? Yeah, probably generics. It's not something that can
+        // be changed at runtime.
+        // let key = pack(&cube.cubelets);
+        let key = as_bytes(&cube.cubelets);
+
+        let update_fn = |slice: Option<&[u8]>| -> Option<_> {
+            let depth = if let Some(slice) = slice {
+                std::cmp::min(D::from_bytes(slice), depth)
             } else {
                 depth
             };
-
-            Some(depth.to_bytes().borrow().to_vec())
+            Some(IVec::from(depth.to_bytes().borrow()))
         };
 
         let previous = self.inner.fetch_and_update(key, update_fn)?;
 
         Ok(previous.map(|ivec| D::from_bytes(ivec.as_ref())))
+    }
+
+    pub fn update_cube(&self, cube: Cube<Position>, depth: D) -> io::Result<()> {
+        match self.insert_cube(&cube, depth) {
+            Ok(None) => Ok(()),
+            Ok(Some(old_depth)) if old_depth > depth  => {
+                match A::ALL.into_iter()
+                        .find_map(|m| {
+                            let new_cube = cube.clone().make_move(*m);
+                            let res = self.update_cube(new_cube, depth.increment());
+                            if res.is_err() {
+                                Some(res)
+                            } else {
+                                None
+                            }
+                        }) {
+                    Some(error) => error,
+                    None => Ok(())
+                }
+            }
+            Ok(Some(_old_depth)) => Ok(()),
+            Err(e) => Err(e),
+        }
+    }
+
+    pub fn update_word(&self, word: Word<A>) -> io::Result<()> {
+        let mut depth = D::ZERO;
+        let mut cube = Cube::default();
+        for action in word.as_actions() {
+            cube = cube.make_move(action);
+            depth = depth.increment();
+            self.update_cube(cube.clone(), depth)?;
+        }
+        Ok(())
     }
 
     pub fn size(&self) -> io::Result<u64> {
