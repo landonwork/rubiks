@@ -2,9 +2,10 @@
 //! starting point for creating a training dataset for an agent.
 
 #![allow(private_bounds)]
-use std::{borrow::Borrow, cmp::PartialOrd, io, marker::PhantomData, ops::Add};
+use std::{borrow::Borrow, cmp::PartialOrd, fmt::{Debug, Display}, io, marker::PhantomData, ops::Add};
 
 use sled::{self, Db, IVec, Tree};
+use pyo3::{IntoPy, PyObject};
 
 use crate::{
     action::{Action, Move, QuarterTurn, Turn},
@@ -15,15 +16,16 @@ use crate::{
 
 fn as_bytes<T>(slice: &[T]) -> &[u8] {
     let ptr: *const _ = slice;
-    unsafe { std::slice::from_raw_parts(ptr.cast(), std::mem::size_of::<T>()) }
+    unsafe { std::slice::from_raw_parts(ptr.cast(), std::mem::size_of::<T>() * slice.len()) }
 }
 
-pub trait Int: PartialOrd + Ord + Copy + Add<Self, Output=Self> {
+pub trait Int: PartialOrd + Ord + Copy + Add<Self, Output=Self> + From<u8> + Debug + Display + IntoPy<PyObject> {
     type ToBytes: Borrow<[u8]>;
     const ZERO: Self;
     fn to_bytes(&self) -> Self::ToBytes;
     fn from_bytes(bytes: &[u8]) -> Self;
     fn increment(self) -> Self;
+    // fn to_pyint(self) -> PyObject;
 }
 
 impl Int for u8 {
@@ -42,6 +44,10 @@ impl Int for u8 {
     fn increment(self) -> Self {
         self + 1
     }
+
+    // fn to_pyint(self) -> PyObject {
+    //     self.into_py()
+    // }
 }
 
 impl Int for u16 {
@@ -154,8 +160,18 @@ impl<D: Int, A: Action + Packable> Book<D, A> {
         let inner = db.open_tree(b"book")?;
         inner.insert(DEPTH_ENTRY, std::any::type_name::<D>())?;
         inner.insert(ACTION_ENTRY, std::any::type_name::<A>())?;
+        let this = Self { db, inner, _phantom: PhantomData }; 
+        this.insert_cube(&Cube::default(), 0u8.into())?;
 
-        Ok(Book { db, inner, _phantom: PhantomData })
+        Ok(this)
+    }
+
+    pub fn create_or_open(file_path: &str) -> io::Result<Self> {
+        if std::path::Path::new(file_path).exists() {
+            Self::open(file_path)
+        } else {
+            Self::create(file_path)
+        }
     }
 
     pub fn contains(&self, cube: &Cube<Position>) -> io::Result<bool> {
@@ -182,7 +198,9 @@ impl<D: Int, A: Action + Packable> Book<D, A> {
             let depth = slice
                 .map(|bytes| { std::cmp::min(D::from_bytes(bytes), depth) })
                 .unwrap_or(depth);
-            Some(IVec::from(depth.to_bytes().borrow()))
+            let b = depth.to_bytes();
+            println!("{:?}, {:?}", slice, b.borrow());
+            Some(IVec::from(b.borrow()))
         };
 
         let previous = self.inner.fetch_and_update(key, update_fn)?;
@@ -191,10 +209,10 @@ impl<D: Int, A: Action + Packable> Book<D, A> {
     }
 
     /// Insert a cube into the book and if the previous recorded depth was overwritten,
-    /// update any neighbors if needed, and recurse.
+    /// update all the neighbors and recurse.
     pub fn update_cube(&self, cube: &Cube<Position>, depth: D) -> io::Result<()> {
         match self.insert_cube(&cube, depth)? {
-            Some(old_depth) if old_depth > depth => {
+            Some(old_depth) if depth < old_depth => {
                 match A::ALL.into_iter()
                     .find_map(|m| {
                         let new_cube = cube.clone().make_move(*m);
@@ -205,20 +223,41 @@ impl<D: Int, A: Action + Packable> Book<D, A> {
                     None => Ok(())
                 }
             }
-            Some(_old_depth) => Ok(()),
-            None => Ok(()),
+            None | Some(_) => Ok(()),
         }
     }
 
     /// Run update_cube for all cubes along the path of the given word.
-    pub fn update_word(&self, word: Word<A>) -> io::Result<()> {
+    pub fn update_word(&self, word: &Word<A>) -> io::Result<()> {
         let mut depth = D::ZERO;
         let mut cube = Cube::default();
+
         for action in word.as_actions() {
             cube = cube.make_move(action);
             depth = depth.increment();
-            self.update_cube(&cube, depth)?;
+            match self.insert_cube(&cube, depth)? {
+                // Copied straight from update_cube
+                Some(old_depth) if depth < old_depth => {
+                    match A::ALL.into_iter()
+                        .find_map(|m| {
+                            let new_cube = cube.clone().make_move(*m);
+                            self.update_cube(&new_cube, depth.increment()).err()
+                        })
+                    {
+                        Some(error) => { return Err(error); }
+                        None => {}
+                    }
+                }
+                // If we come across a cube that has a lower depth than we expect,
+                // we correct our depth and update everything behind.
+                Some(old_depth) if old_depth > depth => {
+                    depth = old_depth;
+                    self.update_cube(&cube.clone().make_move(action.inverse()), depth.increment())?;
+                }
+                None | Some(_) => {},
+            }
         }
+
         Ok(())
     }
 
@@ -322,7 +361,7 @@ fn unpack<T: Packable>(bytes: &[u8]) -> Vec<T> {
     debug_assert!(0 < T::PACKED_BITS && T::PACKED_BITS < 8);
 
     let size = bytes.len() * 8 / T::PACKED_BITS;
-    println!("size: {size}");
+    // println!("size: {size}");
     let mut new = vec![0; size];
 
     let mut bit = 0;
@@ -420,5 +459,51 @@ mod tests {
         drop(new_book);
         let _ = std::fs::remove_dir_all(NAME);
         assert!(!std::path::Path::new(NAME).exists());
+    }
+
+    #[test]
+    fn test_insert() {
+        const NAME: &str = "test_insert";
+        let _ = std::fs::remove_dir_all(NAME);
+        let book: Book<u16, Move> = Book::create(NAME).unwrap();
+        let mut cube = Cube::default();
+        cube = cube.make_move(Move(Axis::X, 0, 1));
+        book.insert_cube(&cube, 1).unwrap();
+        cube = cube.make_move(Move(Axis::X, 0, 2));
+        book.insert_cube(&cube, 2).unwrap();
+        let cube3 = cube.clone().make_move(Move(Axis::Y, 0, 1));
+        book.insert_cube(&cube3, 3).unwrap();
+
+        assert_eq!(Some(3), book.get_depth(&cube3).unwrap());
+        assert_eq!(Some(2), book.get_depth(&cube).unwrap());
+
+        book.update_cube(&cube, 1).unwrap();
+
+        assert_eq!(Some(2), book.get_depth(&cube3).unwrap());
+        assert_eq!(Some(1), book.get_depth(&cube).unwrap());
+    }
+
+    #[test]
+    fn test_insert_word() {
+        const NAME: &str = "test_insert_word";
+        let _ = std::fs::remove_dir_all(NAME);
+        let book: Book<u16, Turn> = Book::create(NAME).unwrap();
+        let word = Word::from([Turn::R, Turn::R, Turn::R, Turn::U]);
+
+        book.update_word(&word).unwrap();
+        assert_eq!(Some(4), book.get_depth(word.cube()).unwrap());
+
+        let normal = word.normal_form();
+        println!("{:?}", normal.actions);
+        book.update_word(&normal).unwrap();
+        assert_eq!(Some(1), book.get_depth(&Cube::default().make_move(Turn::R3)).unwrap());
+        assert_eq!(Some(2), book.get_depth(normal.cube()).unwrap());
+    }
+
+    #[test]
+    fn test_update_word_backtrack() {
+        const NAME: &str = "test_update_word_backtrack";
+        let _ = std::fs::remove_dir_all(NAME);
+        todo!();
     }
 }

@@ -30,6 +30,20 @@ impl<T: Action> Default for Word<T> {
     }
 }
 
+impl<T, A> From<T> for Word<A>
+where
+    T: IntoIterator<Item = A>,
+    A: Action
+{
+    fn from(value: T) -> Self {
+        let mut word = Self::new();
+        for a in value {
+            word.make_move(a);
+        }
+        word
+    }
+}
+
 impl<T: Action> Word<T> {
     pub fn new() -> Self {
         Self {
@@ -50,21 +64,7 @@ impl<T: Action> Word<T> {
     }
 
     pub fn make_move(&mut self, action: T) {
-        let m = action.into();
-        if let Some(last) = self.actions.last_mut() {
-            if last.0 == m.0 {
-                let new = Move(last.0, (last.1 + m.1) % 4, (last.2 + m.2) % 4);
-                if new.1 == 0 && new.2 == 0 {
-                    self.actions.pop();
-                } else {
-                    *last = new;
-                }
-            } else {
-                self.actions.push(m);
-            }
-        } else {
-            self.actions.push(action.into());
-        }
+        self.actions.push(action.into());
         self.cube = self.cube.clone().make_move(action.into());
     }
 
@@ -104,6 +104,10 @@ impl<T: Action> Word<T> {
 
         Self::from_parts_unchecked(cube, actions)
     }
+
+    pub fn cube(&self) -> &Cube<Position> {
+        &self.cube
+    }
 }
 
 impl<A: Action> Extend<A> for Word<A> {
@@ -136,6 +140,7 @@ mod tests {
         word.make_move(Move(Axis::X, 0, 3));
         word.make_move(Move(Axis::X, 1, 3));
         word.make_move(Move(Axis::X, 1, 3));
+        assert_eq!(word.actions.len(), 11);
 
         let Word { cube, actions, .. } = word.normal_form();
         let test_cube = Cube::default()

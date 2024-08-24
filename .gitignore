@@ -3,6 +3,7 @@
 Cargo.lock
 *.txt
 .ipynb_checkpoints
+/venv
 
 # data files
 books

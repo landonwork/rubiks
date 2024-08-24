@@ -27,9 +27,8 @@ the general road map:
 #### v0.2
 
 - [x] Moves, Turns, and QuarterTurns are all valid actions
-- [ ] Improved book creation (inspired by Matt Macauley's concept of the "Big Book" which contains every Rubik's cube state
+- [ ] Book struct with improved performance in book creation and memory usage (inspired by Matt Macauley's concept of the "Big Book" which contains every Rubik's cube state
   and the best move to solve the cube from that state - I highly recommend watching his "Visual Group Theory" series on YouTube!)
-- [ ] Improved performance in book creation and memory usage
 - [x]  [Words](https://en.wikipedia.org/wiki/Word_(group_theory)) which can be reduced and converted to normal form
 
 #### v0.3
