@@ -1,55 +1,44 @@
 // I want to put wrappers here that will change the way different things are formatted to strings
 use std::fmt::Display;
 
-use crate::cube::{Move, Cube, index};
+use crate::cube::{Cube, index};
 
-pub struct MovesList<'a>(pub &'a [Move]);
+pub struct DisplayCube<T>(pub Cube<T>);
 
-impl Display for MovesList<'_> {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        for m in self.0 {
-            writeln!(f, "{}", m)?;
-        }
-        Ok(())
-    }
-}
-
-pub struct DisplayCube(pub Cube);
-
-impl Display for DisplayCube {
+impl<T> Display for DisplayCube<T> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let c = &self.0.cubelets;
         writeln!(
             f,
             "{}{}{}{}{}{}{}{}",
-            pad_right_to(&c[index::<0,2,2>()], 8),
-            pad_right_to(&c[index::<0,1,2>()], 8),
-            pad_right_to(&c[index::<0,0,2>()], 8),
-            pad_right_to(&c[index::<1,0,2>()], 8),
-            pad_right_to(&c[index::<2,0,2>()], 8),
-            pad_right_to(&c[index::<2,1,2>()], 8),
-            pad_right_to(&c[index::<2,2,2>()], 8),
-            pad_right_to(&c[index::<1,2,2>()], 8),
+            pad_right_to(&c[index([0,2,2])], 8),
+            pad_right_to(&c[index([0,1,2])], 8),
+            pad_right_to(&c[index([0,0,2])], 8),
+            pad_right_to(&c[index([1,0,2])], 8),
+            pad_right_to(&c[index([2,0,2])], 8),
+            pad_right_to(&c[index([2,1,2])], 8),
+            pad_right_to(&c[index([2,2,2])], 8),
+            pad_right_to(&c[index([1,2,2])], 8),
         )?;
         writeln!(
             f,
             "{}O       {}G       {}R       {}B       ",
-            pad_right_to(&c[index::<0,2,1>()], 8),
-            pad_right_to(&c[index::<0,0,1>()], 8),
-            pad_right_to(&c[index::<2,0,1>()], 8),
-            pad_right_to(&c[index::<2,2,1>()], 8),
+            pad_right_to(&c[index([0,2,1])], 8),
+            pad_right_to(&c[index([0,0,1])], 8),
+            pad_right_to(&c[index([2,0,1])], 8),
+            pad_right_to(&c[index([2,2,1])], 8),
         )?;
         writeln!(
             f,
             "{}{}{}{}{}{}{}{}",
-            pad_right_to(&c[index::<0,2,0>()], 8),
-            pad_right_to(&c[index::<0,1,0>()], 8),
-            pad_right_to(&c[index::<0,0,0>()], 8),
-            pad_right_to(&c[index::<1,0,0>()], 8),
-            pad_right_to(&c[index::<2,0,0>()], 8),
-            pad_right_to(&c[index::<2,1,0>()], 8),
-            pad_right_to(&c[index::<2,2,0>()], 8),
-            pad_right_to(&c[index::<1,2,0>()], 8),
+            pad_right_to(&c[index([0,2,0])], 8),
+            pad_right_to(&c[index([0,1,0])], 8),
+            pad_right_to(&c[index([0,0,0])], 8),
+            pad_right_to(&c[index([1,0,0])], 8),
+            pad_right_to(&c[index([2,0,0])], 8),
+            pad_right_to(&c[index([2,1,0])], 8),
+            pad_right_to(&c[index([2,2,0])], 8),
+            pad_right_to(&c[index([1,2,0])], 8),
         )?;
         Ok(())
     }
