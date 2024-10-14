@@ -1,0 +1,22 @@
+[tool.poetry]
+name = "rubiks"
+version = "0.1.0"
+description = "\"Representation of 3x3x3 rubik's cubes and everything to train agents to solve them\""
+authors = ["Landon Work <landon.r.work@gmail.com>"]
+readme = "README.md"
+
+[tool.poetry.dependencies]
+python = "^3.9"
+torch = "^2.4.1"
+numpy = "^2.0.0"
+matplotlib = "^3.9.2"
+
+[tool.poetry.group.dev.dependencies]
+jupyter = "^1.1.1"
+pandas = "^2.2.3"
+tqdm = "^4.66.5"
+gymnasium = "^0.29.1"
+
+[build-system]
+requires = ["maturin>=1.0,<2.0"]
+build-backend = "maturin"
