@@ -3,9 +3,11 @@ name = "rubiks"
 version = "0.2.0-beta"
 edition = "2021"
 
-[lib]
-crate-type = ["lib"]
-path = "src/lib.rs"
+# [lib]
+# name = "rubiks_rs"
+# # crate-type = ["lib"]
+# crate-type = ["cdylib"]
+# path = "src/lib.rs"
 
 [[bin]]
 name = "cubix"
@@ -19,6 +21,4 @@ crossterm = "0.27.0"
 pyo3 = "0.22.2"
 ratatui = "0.26.1"
 sled = "0.34.7"
-
-[dev-dependencies]
 rand = "0.8.5"

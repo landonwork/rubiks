@@ -7,9 +7,9 @@ use crossterm::{
 };
 use ratatui::{prelude::*, widgets::*};
 
-use rubiks::{
-    view::DisplayCube, Axis, Action, Cube, Move, Position, Turn, QuarterTurn, Word
-};
+use rubiks::prelude::*;
+use rubiks::view::DisplayCube;
+use rubiks::cubelet::Axis;
 
 #[derive(Default)]
 struct App {

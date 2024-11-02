@@ -16,8 +16,12 @@ pub trait Action: Clone + Copy + PartialEq + Eq + Sized + Into<Move> + Display +
     fn from_move(m: Move) -> Vec<Self>;
 }
 
-// #[derive(Debug)]
-// pub(crate) enum ActionType { Move, Turn, QuarterTurn }
+#[derive(Debug, Clone)]
+pub enum ActionType {
+    Move,
+    Turn,
+    QuarterTurn,
+}
 
 /// Number of turns on the most negative face, number of turns on the most positive face,
 /// and the axis on which the turns happen

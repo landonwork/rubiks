@@ -5,21 +5,21 @@
 use std::{borrow::Borrow, cmp::PartialOrd, fmt::{Debug, Display}, io, marker::PhantomData, ops::Add};
 
 use sled::{self, Db, IVec, Tree};
-use pyo3::{IntoPy, PyObject};
+use pyo3::{prelude::*, types::{PyString, PyStringMethods}};
 
-use crate::{
-    action::{Action, Move, QuarterTurn, Turn},
-    cubelet::Rotation,
-    word::Word,
-    Cube, Position,
-};
+use crate::{action::ActionType, prelude::{
+    Action, Cube, Move, Position, QuarterTurn, Rotation, Turn, Word
+}};
 
 fn as_bytes<T>(slice: &[T]) -> &[u8] {
     let ptr: *const _ = slice;
     unsafe { std::slice::from_raw_parts(ptr.cast(), std::mem::size_of::<T>() * slice.len()) }
 }
 
-pub trait Int: PartialOrd + Ord + Copy + Add<Self, Output=Self> + From<u8> + Debug + Display + IntoPy<PyObject> {
+pub trait Int:
+        PartialOrd + Ord + Copy + Add<Self, Output=Self>
+        + From<u8> + Into<u32> + TryFrom<u32> + Debug + Display
+        + IntoPy<PyObject> {
     type ToBytes: Borrow<[u8]>;
     const ZERO: Self;
     fn to_bytes(&self) -> Self::ToBytes;
@@ -44,10 +44,6 @@ impl Int for u8 {
     fn increment(self) -> Self {
         self + 1
     }
-
-    // fn to_pyint(self) -> PyObject {
-    //     self.into_py()
-    // }
 }
 
 impl Int for u16 {
@@ -199,7 +195,7 @@ impl<D: Int, A: Action + Packable> Book<D, A> {
                 .map(|bytes| { std::cmp::min(D::from_bytes(bytes), depth) })
                 .unwrap_or(depth);
             let b = depth.to_bytes();
-            println!("{:?}, {:?}", slice, b.borrow());
+            // println!("{:?}, {:?}", slice, depth);
             Some(IVec::from(b.borrow()))
         };
 
@@ -235,6 +231,7 @@ impl<D: Int, A: Action + Packable> Book<D, A> {
         for action in word.as_actions() {
             cube = cube.make_move(action);
             depth = depth.increment();
+
             match self.insert_cube(&cube, depth)? {
                 // Copied straight from update_cube
                 Some(old_depth) if depth < old_depth => {
@@ -250,7 +247,7 @@ impl<D: Int, A: Action + Packable> Book<D, A> {
                 }
                 // If we come across a cube that has a lower depth than we expect,
                 // we correct our depth and update everything behind.
-                Some(old_depth) if old_depth > depth => {
+                Some(old_depth) if old_depth < depth => {
                     depth = old_depth;
                     self.update_cube(&cube.clone().make_move(action.inverse()), depth.increment())?;
                 }
@@ -384,6 +381,130 @@ fn unpack<T: Packable>(bytes: &[u8]) -> Vec<T> {
 }
 
 
+trait CubeStore {
+    // fn new(file_path: &str, mode: &str) -> io::Result<Box<Self>>;
+    fn contains(&self, cube: &Cube<Position>) -> io::Result<bool>;
+    fn get_depth(&self, cube: &Cube<Position>) -> io::Result<Option<u32>>;
+    fn insert_cube(&self, cube: &Cube<Position>, depth: u32) -> io::Result<Option<u32>>;
+    fn update_cube(&self, cube: &Cube<Position>, depth: u32) -> io::Result<()>;
+    fn update_word(&self, word: &[Move]) -> io::Result<()>;
+    fn size(&self) -> io::Result<u64>;
+}
+
+impl<D: Int, A: Action + Packable> CubeStore for Book<D, A> {
+    // fn new(file_path: &str, mode: &str) -> io::Result<Box<Self>> {
+    //     match mode {
+    //         "open" => { Ok(Box::new(Self::open(file_path)?)) }
+    //         "create" => { Ok(Box::new(Self::create(file_path)?)) }
+    //         "either" => { Ok(Box::new(Self::create_or_open(file_path)?)) }
+    //         "overwrite" => { std::fs::remove_dir(file_path)?; Ok(Box::new(Self::open(file_path)?)) }
+    //         _ => { Err(io::Error::new(io::ErrorKind::InvalidInput, format!("'{mode}' is an invalid mode: please pass 'open', 'create', or 'overwrite'"))) }
+    //     }
+    // }
+
+    fn contains(&self, cube: &Cube<Position>) -> io::Result<bool> {
+        self.contains(cube)
+    }
+
+    fn get_depth(&self, cube: &Cube<Position>) -> io::Result<Option<u32>> {
+        Ok(self.get_depth(cube)?.map(Into::into))
+    }
+
+    fn insert_cube(&self, cube: &Cube<Position>, depth: u32) -> io::Result<Option<u32>> {
+        let depth = depth.try_into().map_err(|_| io::Error::new(io::ErrorKind::InvalidInput, format!("Value {depth} does not convert to type {}", std::any::type_name::<D>())))?;
+        Ok(self.insert_cube(cube, depth)?.map(Into::into))
+    }
+
+    fn update_cube(&self, cube: &Cube<Position>, depth: u32) -> io::Result<()> {
+        let depth = depth.try_into().map_err(|_| io::Error::new(io::ErrorKind::InvalidInput, format!("Value {depth} does not convert to type {}", std::any::type_name::<D>())))?;
+        self.update_cube(cube, depth)
+    }
+
+    fn update_word(&self, word: &[Move]) -> io::Result<()> {
+        let word = Word::from(word.to_vec());
+        let word = Word::from_parts_unchecked(word.cube, word.actions);
+        self.update_word(&word)
+    }
+
+    fn size(&self) -> io::Result<u64> {
+        self.size()
+    }
+}
+
+#[pyclass(name = "Book")]
+pub struct PyBook {
+    inner: Box<dyn CubeStore + Send>
+}
+
+#[pymethods]
+impl PyBook {
+    #[new]
+    #[pyo3(signature = (path, mode, dtype, action))]
+    fn new(path: &Bound<'_, PyString>, mode: &Bound<'_, PyString>, dtype: &Bound<'_, PyString>, action: &Bound<'_, PyString>) -> PyResult<Self> {
+        let inner: Box<dyn CubeStore + Send + 'static> = match (mode.to_str()?, dtype.to_str()?, action.to_str()?) {
+            ("create", "u8", "move") => {
+                Box::new(Book::<u8, Move>::create(path.to_str()?)?)
+            }
+            ("create", "u8", "turn") => {
+                Box::new(Book::<u8, Turn>::create(path.to_str()?)?)
+            }
+            ("create", "u8", "quarterturn") => {
+                Box::new(Book::<u8, QuarterTurn>::create(path.to_str()?)?)
+            }
+            ("create", "u16", "move") => {
+                Box::new(Book::<u16, Move>::create(path.to_str()?)?)
+            }
+            ("create", "u16", "turn") => {
+                Box::new(Book::<u16, Turn>::create(path.to_str()?)?)
+            }
+            ("create", "u16", "quarterturn") => {
+                Box::new(Book::<u16, QuarterTurn>::create(path.to_str()?)?)
+            }
+            ("create", "u32", "move") => {
+                Box::new(Book::<u32, Move>::create(path.to_str()?)?)
+            }
+            ("create", "u32", "turn") => {
+                Box::new(Book::<u32, Turn>::create(path.to_str()?)?)
+            }
+            ("create", "u32", "quarterturn") => {
+                Box::new(Book::<u32, QuarterTurn>::create(path.to_str()?)?)
+            }
+            ("open", "u8", "move") => {
+                Box::new(Book::<u8, Move>::open(path.to_str()?)?)
+            }
+            ("open", "u8", "turn") => {
+                Box::new(Book::<u8, Turn>::open(path.to_str()?)?)
+            }
+            ("open", "u8", "quarterturn") => {
+                Box::new(Book::<u8, QuarterTurn>::open(path.to_str()?)?)
+            }
+            ("open", "u16", "move") => {
+                Box::new(Book::<u16, Move>::open(path.to_str()?)?)
+            }
+            ("open", "u16", "turn") => {
+                Box::new(Book::<u16, Turn>::open(path.to_str()?)?)
+            }
+            ("open", "u16", "quarterturn") => {
+                Box::new(Book::<u16, QuarterTurn>::open(path.to_str()?)?)
+            }
+            ("open", "u32", "move") => {
+                Box::new(Book::<u32, Move>::open(path.to_str()?)?)
+            }
+            ("open", "u32", "turn") => {
+                Box::new(Book::<u32, Turn>::open(path.to_str()?)?)
+            }
+            ("open", "u32", "quarterturn") => {
+                Box::new(Book::<u32, QuarterTurn>::open(path.to_str()?)?)
+            }
+
+            _ => { Err(io::Error::new(io::ErrorKind::Unsupported, format!("{}, {}, {:?}", mode, dtype, action)))?; unreachable!() }
+        };
+
+        Ok(Self { inner })
+    }
+}
+
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -504,6 +625,23 @@ mod tests {
     fn test_update_word_backtrack() {
         const NAME: &str = "test_update_word_backtrack";
         let _ = std::fs::remove_dir_all(NAME);
-        todo!();
+        let book: Book<u16, Turn> = Book::create(NAME).unwrap();
+
+        let mut word = Word::new();
+        let mut mid18 = Word::new();
+        let mut count = 0;
+        for _ in 0..6 {
+            for t in [Turn::R3, Turn::D3, Turn::R, Turn::D] {
+                word.make_move(t);
+                count += 1;
+                if count == 18 {
+                    mid18 = word.clone();
+                }
+            }
+        }
+
+        book.update_word(&word).unwrap();
+        assert_eq!(Cube::default(), word.cube);
+        assert_eq!(Some(6), book.get_depth(&mid18.cube).unwrap());
     }
 }

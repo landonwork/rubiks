@@ -1,5 +1,5 @@
 use std::{fmt::Display, marker::PhantomData};
-use crate::{Action, Move, Cube, Position};
+use crate::prelude::{Action, Move, Cube, Position};
 
 // 
 #[derive(Clone, Debug)]
@@ -35,9 +35,9 @@ where
     T: IntoIterator<Item = A>,
     A: Action
 {
-    fn from(value: T) -> Self {
+    fn from(iterator: T) -> Self {
         let mut word = Self::new();
-        for a in value {
+        for a in iterator {
             word.make_move(a);
         }
         word
@@ -123,7 +123,7 @@ impl<A: Action> Extend<A> for Word<A> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{Axis, Move};
+    use crate::prelude::Axis;
 
     #[test]
     fn test_word_stuff() {

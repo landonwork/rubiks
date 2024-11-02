@@ -1,16 +1,21 @@
 pub mod action;
-pub use action::{Action, Move, Turn, QuarterTurn};
 pub mod book;
 pub mod cube;
-pub use cube::{Cube, Position};
 pub mod cubelet;
-pub use cubelet::{Rotation, Axis};
 pub mod strategy;
 pub mod view;
 pub mod word;
-pub use word::Word;
+pub mod prelude;
+
 // TODO: make compatible with laion/strategic_game_cube dataset to use as a benchmark
 // and to get results comparable with anyone else's for this very niche problem.
 // pub mod strategic_game_cube;
-//
 
+
+use pyo3::prelude::*;
+
+#[pymodule]
+fn rubik_rs(m: &Bound<'_, PyModule>) -> PyResult<()> {
+    m.add_class::<book::PyBook>()?;
+    Ok(())
+}

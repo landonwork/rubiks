@@ -6,10 +6,7 @@ use std::{
     marker::PhantomData,
 };
 
-use crate::{
-    action::Move,
-    cubelet::{Axis, Rotation}
-};
+use crate::prelude::{Move, Axis, Rotation};
 
 /// A Rubiks' cube's state, represented by the orientation of the cubelets.
 /// Cubelets are ordered by position or ID, meaning ordered by beginning position.
