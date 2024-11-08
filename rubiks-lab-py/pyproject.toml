@@ -1,0 +1,20 @@
+[tool.poetry]
+name = "rubiks-lab-py"
+version = "0.1.0"
+description = "All-purpose package for the 3x3x3 Rubik's cube and RL"
+authors = ["Landon Work <landon.r.work@gmail.com>"]
+
+[tool.poetry.dependencies]
+python = "^3.12"
+
+
+[tool.poetry.group.dev.dependencies]
+poetry = "^1.8.4"
+jupyter = "^1.1.1"
+
+[build-system]
+requires = ["maturin>=1.0,<2.0"]
+build-backend = "maturin"
+
+[tool.maturin]
+features = ["pyo3/extension-module"]

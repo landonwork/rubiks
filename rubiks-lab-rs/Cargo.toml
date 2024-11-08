@@ -1,5 +1,5 @@
 [package]
-name = "rubiks"
+name = "rubiks_lab_rs"
 version = "0.2.0-beta"
 edition = "2021"
 

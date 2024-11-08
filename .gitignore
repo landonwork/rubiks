@@ -1,9 +1,12 @@
-/target
-/test
+target
+test
+tests
+dist
 Cargo.lock
+poetry.lock
 *.txt
 .ipynb_checkpoints
-/venv
+venv
 
 # data files
 books

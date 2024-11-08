@@ -1,0 +1,13 @@
+[package]
+name = "rubiks-lab-py"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+name = "rubiks_core"
+crate-type = ["cdylib"]
+
+[dependencies]
+rubiks-lab-rs = { path = "../rubiks-lab-rs" }
+pyo3 = { version = "0.21.1", features = ["abi3-py312"] }
+
