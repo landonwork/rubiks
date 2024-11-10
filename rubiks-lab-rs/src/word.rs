@@ -1,5 +1,5 @@
 use std::{fmt::Display, marker::PhantomData};
-use crate::{Action, Move, Cube, Position};
+use crate::prelude::*;
 
 // 
 #[derive(Clone, Debug)]

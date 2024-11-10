@@ -1,18 +1,19 @@
 //! A construct that represents accumulated knowledge of the Rubik's cube group. This will be the
 //! starting point for creating a training dataset for an agent.
 
-#![allow(private_bounds)]
-use std::{borrow::Borrow, cmp::PartialOrd, fmt::{Debug, Display}, io, marker::PhantomData, ops::Add};
+use std::{
+    borrow::Borrow,
+    cmp::PartialOrd,
+    fmt::{Debug, Display},
+    io,
+    marker::PhantomData,
+    ops::Add
+};
 
 use sled::{self, Db, IVec, Tree};
 use pyo3::{IntoPy, PyObject};
 
-use crate::{
-    action::{Action, Move, QuarterTurn, Turn},
-    cubelet::Rotation,
-    word::Word,
-    Cube, Position,
-};
+use crate::prelude::*;
 
 fn as_bytes<T>(slice: &[T]) -> &[u8] {
     let ptr: *const _ = slice;

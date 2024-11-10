@@ -7,9 +7,9 @@ use crossterm::{
 };
 use ratatui::{prelude::*, widgets::*};
 
-use rubiks::{
-    view::DisplayCube, Axis, Action, Cube, Move, Position, Turn, QuarterTurn, Word
-};
+use rubiks_lab_rs::prelude::*;
+use rubiks_lab_rs::cubelet;
+use rubiks_lab_rs::view::DisplayCube;
 
 #[derive(Default)]
 struct App {
@@ -117,51 +117,51 @@ fn handle_events(app: &mut App) -> io::Result<bool> {
                     KeyCode::Esc => { return Ok(true); }
                     // Make a move
                     KeyCode::Char('q') => {
-                        app.active_mut().make_move(Move(Axis::Y, 3, 0));
+                        app.active_mut().make_move(Move(cubelet::Axis::Y, 3, 0));
                         app.active_mut().normalize();
                     }
                     KeyCode::Char('Q') => {
-                        app.active_mut().make_move(Move(Axis::Y, 0, 3));
+                        app.active_mut().make_move(Move(cubelet::Axis::Y, 0, 3));
                         app.active_mut().normalize();
                     }
                     KeyCode::Char('e') => {
-                        app.active_mut().make_move(Move(Axis::Y, 1, 0));
+                        app.active_mut().make_move(Move(cubelet::Axis::Y, 1, 0));
                         app.active_mut().normalize();
                     }
                     KeyCode::Char('E') => {
-                        app.active_mut().make_move(Move(Axis::Y, 0, 1));
+                        app.active_mut().make_move(Move(cubelet::Axis::Y, 0, 1));
                         app.active_mut().normalize();
                     }
                     KeyCode::Char('w') => {
-                        app.active_mut().make_move(Move(Axis::X, 3, 0));
+                        app.active_mut().make_move(Move(cubelet::Axis::X, 3, 0));
                         app.active_mut().normalize();
                     }
                     KeyCode::Char('W') => {
-                        app.active_mut().make_move(Move(Axis::X, 0, 3));
+                        app.active_mut().make_move(Move(cubelet::Axis::X, 0, 3));
                         app.active_mut().normalize();
                     }
                     KeyCode::Char('s') => {
-                        app.active_mut().make_move(Move(Axis::X, 1, 0));
+                        app.active_mut().make_move(Move(cubelet::Axis::X, 1, 0));
                         app.active_mut().normalize();
                     }
                     KeyCode::Char('S') => {
-                        app.active_mut().make_move(Move(Axis::X, 0, 1));
+                        app.active_mut().make_move(Move(cubelet::Axis::X, 0, 1));
                         app.active_mut().normalize();
                     }
                     KeyCode::Char('a') => {
-                        app.active_mut().make_move(Move(Axis::Z, 3, 0));
+                        app.active_mut().make_move(Move(cubelet::Axis::Z, 3, 0));
                         app.active_mut().normalize();
                     }
                     KeyCode::Char('A') => {
-                        app.active_mut().make_move(Move(Axis::Z, 0, 3));
+                        app.active_mut().make_move(Move(cubelet::Axis::Z, 0, 3));
                         app.active_mut().normalize();
                     }
                     KeyCode::Char('d') => {
-                        app.active_mut().make_move(Move(Axis::Z, 1, 0));
+                        app.active_mut().make_move(Move(cubelet::Axis::Z, 1, 0));
                         app.active_mut().normalize();
                     }
                     KeyCode::Char('D') => {
-                        app.active_mut().make_move(Move(Axis::Z, 0, 1));
+                        app.active_mut().make_move(Move(cubelet::Axis::Z, 0, 1));
                         app.active_mut().normalize();
                     }
                     // undo

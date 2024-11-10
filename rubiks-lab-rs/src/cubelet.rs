@@ -8,7 +8,6 @@
 use std::fmt::Display;
 
 /// We humans think of space as 3-dimensional and so that will be reflected in the notation.
-///
 #[repr(u8)]
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum Axis { X, Y, Z, }
@@ -19,15 +18,15 @@ impl Display for Axis {
     }
 }
 
-/// The 24 possible rotations for a cube in their reduced form
+/// The 24 possible rotations for a cube in their reduced normal form
 #[repr(u8)]
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum Rotation {
     // neutral
     Neutral,
-    // generators
+    // one-action words
     X, X2, X3, Y, Y2, Y3, Z, Z2, Z3,
-    // others
+    // two-action words
     XY, XY2, XY3, XZ, XZ2, XZ3,
     X2Y, X2Y3, X2Z, X2Z3,
     X3Y, X3Y3, X3Z, X3Z3

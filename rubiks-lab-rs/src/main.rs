@@ -8,12 +8,8 @@ use std::{
 };
 
 use clap::Parser;
-use rubiks::{
-    cube::{Cube, self},
-    cubelet::{Cubelet, Rotation, Axis},
-    view::DisplayCube,
-    book::Book
-};
+use rubiks_lab_rs::prelude::*;
+use rubiks_lab_rs::view::DisplayCube;
 
 #[derive(Parser)]
 #[command(version, about, long_about = None)]
