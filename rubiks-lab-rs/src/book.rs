@@ -7,17 +7,17 @@ use sled::{self, Db, IVec, Tree};
 
 use crate::prelude::*;
 
-fn as_bytes<T>(slice: &[T]) -> &[u8] {
-    let ptr: *const _ = slice;
-    unsafe { std::slice::from_raw_parts(ptr.cast(), std::mem::size_of::<T>() * slice.len()) }
-}
+// fn as_bytes<T>(slice: &[T]) -> &[u8] {
+//     let ptr: *const _ = slice;
+//     unsafe { std::slice::from_raw_parts(ptr.cast(), std::mem::size_of::<T>() * slice.len()) }
+// }
 
 // I think we always store the cube as the key, followed by the depth (u8, u16, u32).
 // There will be a special entry that records the format of
 // the Book. On opening an existing Book, it checks the data format and returns an error if the
 // format does not match the generics in the tree.
 #[derive(Clone)]
-pub struct Book<Action = Turn, const PACKED: bool = false> {
+pub struct Book<Action = Turn> {
     // Db struct included to have access to the size_on_disk method
     db: Db,
     inner: Tree,
@@ -27,9 +27,10 @@ pub struct Book<Action = Turn, const PACKED: bool = false> {
 }
 
 const ACTION_ENTRY: &[u8] = b"this_books_action_type";
+const PACKED_ENTRY: &[u8] = b"this_books_packed_attribute";
 
 #[allow(private_bounds)]
-impl<A: Action + Packable> Book<A, true> {
+impl<A: Action + Packable> Book<A> {
     pub fn open(file_path: &str) -> io::Result<Self> {
         let db = sled::open(file_path)?;
         if !db.was_recovered() {
@@ -47,7 +48,8 @@ impl<A: Action + Packable> Book<A, true> {
             )
             .map_err(|_| io::Error::new(io::ErrorKind::InvalidData, "Invalid UTF-8 found in action type entry"))?
             .to_owned();
-        if std::str::from_utf8(action_type.as_ref()).unwrap() != std::any::type_name::<A>() {
+
+        if &action_type != std::any::type_name::<A>() {
             return Err(io::Error::new(
                 io::ErrorKind::InvalidData,
                 format!(
@@ -58,7 +60,34 @@ impl<A: Action + Packable> Book<A, true> {
             ))
         }
 
-        Ok(Book { db, inner, _phantom: PhantomData })
+        // Check packed attribute
+        let packed_attr = std::str::from_utf8(
+            inner.get(PACKED_ENTRY)?
+                .ok_or(io::Error::new(io::ErrorKind::NotFound, "Opened book does not contain a packed attribute"))?
+                .as_ref()
+            )
+            .map_err(|_| io::Error::new(io::ErrorKind::InvalidData, "Invalid UTF-8 found in packed attribute"))?
+            .to_owned();
+
+        if &packed_attr != "false" {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                format!(
+                    "Opened book has a different packed attribute: expected {}, got {}",
+                    false,
+                    packed_attr
+                )
+            ))
+        }
+
+        let book = Book { db, inner, _phantom: PhantomData };
+        book.get_depth(&Cube::<Position>::default())?
+            .ok_or(io::Error::new(
+                io::ErrorKind::NotFound,
+                "Book does not contain the solved cube".to_owned()
+            ))?;
+
+        Ok(book)
     }
 
     pub fn create(file_path: &str) -> io::Result<Self> {
@@ -82,11 +111,11 @@ impl<A: Action + Packable> Book<A, true> {
     }
 
     pub fn contains(&self, cube: &Cube<Position>) -> io::Result<bool> {
-        Ok(self.inner.get(as_bytes(&cube.cubelets))?.is_some())
+        Ok(self.inner.get(pack(&cube.cubelets))?.is_some())
     }
 
     pub fn get_depth(&self, cube: &Cube<Position>) -> io::Result<Option<u8>> {
-        let depth = self.inner.get(as_bytes(&cube.cubelets))?;
+        let depth = self.inner.get(pack(&cube.cubelets))?;
         Ok(depth.map(|ivec| ivec[0]))
     }
 
@@ -95,11 +124,7 @@ impl<A: Action + Packable> Book<A, true> {
     /// passed depth is less than the existing depth. The existing depth is returned if there is
     /// one.
     pub fn insert_cube(&self, cube: &Cube<Position>, depth: u8) -> io::Result<Option<u8>> {
-        // TODO: pack if packed; is packed part of the generics or is it a runtime setting?
-        // Probably the generics, right? Yeah, probably generics. It's not something that can
-        // be changed at runtime.
-        // let key = pack(&cube.cubelets);
-        let key = as_bytes(&cube.cubelets);
+        let key = pack(&cube.cubelets);
 
         let update_fn = |slice: Option<&[u8]>| -> Option<_> {
             let depth = slice
@@ -156,7 +181,7 @@ impl<A: Action + Packable> Book<A, true> {
                 }
                 // If we come across a cube that has a lower depth than we expect,
                 // we correct our depth and update everything behind.
-                Some(old_depth) if old_depth > depth => {
+                Some(old_depth) if depth > old_depth => {
                     depth = old_depth;
                     self.update_cube(&cube.clone().make_move(action.inverse()), depth + 1)?;
                 }
@@ -263,6 +288,7 @@ fn pack<T: Packable>(values: &[T]) -> Vec<u8> {
 /// `bytes` is the slice to be packed and `packed_bits` is the number of bits that each byte was
 /// packed into (between 1 and 7). Warning: if there are enough padding bits at the end to unpack
 /// another value, this function WILL unpack it;
+#[allow(dead_code)]
 fn unpack<T: Packable>(bytes: &[u8]) -> Vec<T> {
     debug_assert!(0 < T::PACKED_BITS && T::PACKED_BITS < 8);
 
@@ -300,6 +326,7 @@ mod tests {
     #[test]
     fn test_pack() {
         #[derive(Copy, Clone)]
+        #[allow(dead_code)]
         struct A(u8);
         impl Packable for A { const PACKED_BITS: usize = 3; }
 
@@ -354,12 +381,12 @@ mod tests {
         const NAME: &str = "test_create_book";
         let _ = std::fs::remove_dir_all(NAME);
 
-        let res1: Result<Book<Move, true>, _> = Book::open(NAME);
+        let res1: Result<Book<Move>, _> = Book::open(NAME);
         assert!(res1.is_err());
         assert!(!std::path::Path::new(NAME).exists());
 
-        let new_book: Book<Move, true> = Book::create(NAME).unwrap();
-        let res2: Result<Book<Move, true>, _> = Book::create(NAME);
+        let new_book: Book<Move> = Book::create(NAME).unwrap();
+        let res2: Result<Book<Move>, _> = Book::create(NAME);
         assert!(res2.is_err());
 
         drop(new_book);
@@ -371,7 +398,7 @@ mod tests {
     fn test_insert() {
         const NAME: &str = "test_insert";
         let _ = std::fs::remove_dir_all(NAME);
-        let book: Book<Move, true> = Book::create(NAME).unwrap();
+        let book: Book<Move> = Book::create(NAME).unwrap();
         let mut cube = Cube::default();
         cube = cube.make_move(Move(Axis::X, 0, 1));
         book.insert_cube(&cube, 1).unwrap();
@@ -393,7 +420,7 @@ mod tests {
     fn test_insert_word() {
         const NAME: &str = "test_insert_word";
         let _ = std::fs::remove_dir_all(NAME);
-        let book: Book<Turn, true> = Book::create(NAME).unwrap();
+        let book: Book<Turn> = Book::create(NAME).unwrap();
         let word = Word::from([Turn::R, Turn::R, Turn::R, Turn::U]);
 
         book.update_word(&word).unwrap();
@@ -410,6 +437,23 @@ mod tests {
     fn test_update_word_backtrack() {
         const NAME: &str = "test_update_word_backtrack";
         let _ = std::fs::remove_dir_all(NAME);
-        todo!();
+        let book: Book<Turn> = Book::create(NAME).unwrap();
+
+        let mut word = Word::new();
+        let mut mid18 = Word::new();
+        let mut count = 0;
+        for _ in 0..6 {
+            for t in [Turn::R3, Turn::D3, Turn::R, Turn::D] {
+                word.make_move(t);
+                count += 1;
+                if count == 18 {
+                    mid18 = word.clone();
+                }
+            }
+        }
+
+        book.update_word(&word).unwrap();
+        assert_eq!(Cube::default(), word.cube);
+        assert_eq!(Some(6), book.get_depth(&mid18.cube).unwrap());
     }
 }
