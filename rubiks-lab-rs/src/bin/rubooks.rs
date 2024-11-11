@@ -15,10 +15,15 @@ use rubiks_lab_rs::view::DisplayCube;
 #[command(version, about, long_about = None)]
 struct Args {
     #[arg(short, long, default_value_t = 3)]
-    depth: u8
+    depth: u8,
+    // #[arg(short, long, default_value_t = false)]
+    // random: usize,
+    // #[arg(short, long)]
+    // n_scrambles: Option<usize>,
 }
 
 fn main() -> Result<(), std::io::Error> {
+    // let book = Book
 
     Ok(())
 }

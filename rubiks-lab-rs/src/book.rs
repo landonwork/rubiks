@@ -1,17 +1,9 @@
 //! A construct that represents accumulated knowledge of the Rubik's cube group. This will be the
 //! starting point for creating a training dataset for an agent.
 
-use std::{
-    borrow::Borrow,
-    cmp::PartialOrd,
-    fmt::{Debug, Display},
-    io,
-    marker::PhantomData,
-    ops::Add
-};
+use std::{io, marker::PhantomData};
 
 use sled::{self, Db, IVec, Tree};
-use pyo3::{IntoPy, PyObject};
 
 use crate::prelude::*;
 
@@ -20,90 +12,24 @@ fn as_bytes<T>(slice: &[T]) -> &[u8] {
     unsafe { std::slice::from_raw_parts(ptr.cast(), std::mem::size_of::<T>() * slice.len()) }
 }
 
-pub trait Int: PartialOrd + Ord + Copy + Add<Self, Output=Self> + From<u8> + Debug + Display + IntoPy<PyObject> {
-    type ToBytes: Borrow<[u8]>;
-    const ZERO: Self;
-    fn to_bytes(&self) -> Self::ToBytes;
-    fn from_bytes(bytes: &[u8]) -> Self;
-    fn increment(self) -> Self;
-    // fn to_pyint(self) -> PyObject;
-}
-
-impl Int for u8 {
-    type ToBytes = [u8; 1];
-    const ZERO: Self = 0;
-
-    fn to_bytes(&self) -> Self::ToBytes {
-        self.to_le_bytes()
-    }
-
-    fn from_bytes(bytes: &[u8]) -> Self {
-        debug_assert_eq!(bytes.len(), 1);
-        bytes[0]
-    }
-
-    fn increment(self) -> Self {
-        self + 1
-    }
-
-    // fn to_pyint(self) -> PyObject {
-    //     self.into_py()
-    // }
-}
-
-impl Int for u16 {
-    type ToBytes = [u8; 2];
-    const ZERO: Self = 0;
-
-    fn to_bytes(&self) -> Self::ToBytes {
-        self.to_le_bytes()
-    }
-
-    fn from_bytes(bytes: &[u8]) -> Self {
-        u16::from_le_bytes(bytes.try_into().unwrap())
-    }
-
-    fn increment(self) -> Self {
-        self + 1
-    }
-}
-
-impl Int for u32 {
-    type ToBytes = [u8; 4];
-    const ZERO: Self = 0;
-
-    fn to_bytes(&self) -> Self::ToBytes {
-        self.to_le_bytes()
-    }
-
-    fn from_bytes(bytes: &[u8]) -> Self {
-        u32::from_le_bytes(bytes.try_into().unwrap())
-    }
-
-    fn increment(self) -> Self {
-        self + 1
-    }
-}
-
-
 // I think we always store the cube as the key, followed by the depth (u8, u16, u32).
 // There will be a special entry that records the format of
 // the Book. On opening an existing Book, it checks the data format and returns an error if the
 // format does not match the generics in the tree.
 #[derive(Clone)]
-pub struct Book<Depth = u16, Action = Turn> {
+pub struct Book<Action = Turn, const PACKED: bool = false> {
     // Db struct included to have access to the size_on_disk method
     db: Db,
     inner: Tree,
     // Depth: "this_books_depth_type"
     // Action: "this_books_action_type"
-    _phantom: PhantomData<(Depth, Action)>,
+    _phantom: PhantomData<Action>,
 }
 
-const DEPTH_ENTRY: &[u8] = b"this_books_depth_type";
 const ACTION_ENTRY: &[u8] = b"this_books_action_type";
 
-impl<D: Int, A: Action + Packable> Book<D, A> {
+#[allow(private_bounds)]
+impl<A: Action + Packable> Book<A, true> {
     pub fn open(file_path: &str) -> io::Result<Self> {
         let db = sled::open(file_path)?;
         if !db.was_recovered() {
@@ -112,25 +38,6 @@ impl<D: Int, A: Action + Packable> Book<D, A> {
         }
 
         let inner = db.open_tree(b"book")?;
-
-        // Check depth type
-        let depth_type = std::str::from_utf8(
-            inner.get(DEPTH_ENTRY)?
-                .ok_or(io::Error::new(io::ErrorKind::NotFound, "Opened book does not contain a depth type"))?
-                .as_ref()
-            )
-            .map_err(|_| io::Error::new(io::ErrorKind::InvalidData, "Invalid UTF-8 found in depth type entry"))?
-            .to_owned();
-        if std::str::from_utf8(depth_type.as_ref()).unwrap() != std::any::type_name::<D>() {
-            return Err(io::Error::new(
-                io::ErrorKind::InvalidData,
-                format!(
-                    "Opened book has a different depth type: expected {}, got {}",
-                    std::any::type_name::<D>(),
-                    depth_type
-                )
-            ))
-        }
 
         // Check action type
         let action_type = std::str::from_utf8(
@@ -159,7 +66,6 @@ impl<D: Int, A: Action + Packable> Book<D, A> {
         if db.was_recovered() { return Err(io::Error::new(io::ErrorKind::AlreadyExists, file_path.to_owned())); }
 
         let inner = db.open_tree(b"book")?;
-        inner.insert(DEPTH_ENTRY, std::any::type_name::<D>())?;
         inner.insert(ACTION_ENTRY, std::any::type_name::<A>())?;
         let this = Self { db, inner, _phantom: PhantomData }; 
         this.insert_cube(&Cube::default(), 0u8.into())?;
@@ -179,16 +85,16 @@ impl<D: Int, A: Action + Packable> Book<D, A> {
         Ok(self.inner.get(as_bytes(&cube.cubelets))?.is_some())
     }
 
-    pub fn get_depth(&self, cube: &Cube<Position>) -> io::Result<Option<D>> {
+    pub fn get_depth(&self, cube: &Cube<Position>) -> io::Result<Option<u8>> {
         let depth = self.inner.get(as_bytes(&cube.cubelets))?;
-        Ok(depth.map(|ivec| D::from_bytes(ivec.as_ref())))
+        Ok(depth.map(|ivec| ivec[0]))
     }
 
     /// Insert a cube and a depth into the book. If the book has no record of the cube, the cube
     /// and depth are inserted. If the book has an existing record, it is only replaced if the
     /// passed depth is less than the existing depth. The existing depth is returned if there is
     /// one.
-    pub fn insert_cube(&self, cube: &Cube<Position>, depth: D) -> io::Result<Option<D>> {
+    pub fn insert_cube(&self, cube: &Cube<Position>, depth: u8) -> io::Result<Option<u8>> {
         // TODO: pack if packed; is packed part of the generics or is it a runtime setting?
         // Probably the generics, right? Yeah, probably generics. It's not something that can
         // be changed at runtime.
@@ -197,27 +103,26 @@ impl<D: Int, A: Action + Packable> Book<D, A> {
 
         let update_fn = |slice: Option<&[u8]>| -> Option<_> {
             let depth = slice
-                .map(|bytes| { std::cmp::min(D::from_bytes(bytes), depth) })
+                .map(|bytes| { std::cmp::min(bytes[0], depth) })
                 .unwrap_or(depth);
-            let b = depth.to_bytes();
-            println!("{:?}, {:?}", slice, b.borrow());
-            Some(IVec::from(b.borrow()))
+            println!("{:?}, {:?}", slice, &[depth]);
+            Some(IVec::from(&[depth]))
         };
 
         let previous = self.inner.fetch_and_update(key, update_fn)?;
 
-        Ok(previous.map(|ivec| D::from_bytes(ivec.as_ref())))
+        Ok(previous.map(|ivec| ivec[0]))
     }
 
     /// Insert a cube into the book and if the previous recorded depth was overwritten,
     /// update all the neighbors and recurse.
-    pub fn update_cube(&self, cube: &Cube<Position>, depth: D) -> io::Result<()> {
+    pub fn update_cube(&self, cube: &Cube<Position>, depth: u8) -> io::Result<()> {
         match self.insert_cube(&cube, depth)? {
             Some(old_depth) if depth < old_depth => {
                 match A::ALL.into_iter()
                     .find_map(|m| {
                         let new_cube = cube.clone().make_move(*m);
-                        self.update_cube(&new_cube, depth.increment()).err()
+                        self.update_cube(&new_cube, depth + 1).err()
                     })
                 {
                     Some(error) => Err(error),
@@ -230,19 +135,19 @@ impl<D: Int, A: Action + Packable> Book<D, A> {
 
     /// Run update_cube for all cubes along the path of the given word.
     pub fn update_word(&self, word: &Word<A>) -> io::Result<()> {
-        let mut depth = D::ZERO;
+        let mut depth = 0;
         let mut cube = Cube::default();
 
         for action in word.as_actions() {
             cube = cube.make_move(action);
-            depth = depth.increment();
+            depth += 1;
             match self.insert_cube(&cube, depth)? {
                 // Copied straight from update_cube
                 Some(old_depth) if depth < old_depth => {
                     match A::ALL.into_iter()
                         .find_map(|m| {
                             let new_cube = cube.clone().make_move(*m);
-                            self.update_cube(&new_cube, depth.increment()).err()
+                            self.update_cube(&new_cube, depth + 1).err()
                         })
                     {
                         Some(error) => { return Err(error); }
@@ -253,7 +158,7 @@ impl<D: Int, A: Action + Packable> Book<D, A> {
                 // we correct our depth and update everything behind.
                 Some(old_depth) if old_depth > depth => {
                     depth = old_depth;
-                    self.update_cube(&cube.clone().make_move(action.inverse()), depth.increment())?;
+                    self.update_cube(&cube.clone().make_move(action.inverse()), depth + 1)?;
                 }
                 None | Some(_) => {},
             }
@@ -449,12 +354,12 @@ mod tests {
         const NAME: &str = "test_create_book";
         let _ = std::fs::remove_dir_all(NAME);
 
-        let res1: Result<Book<u16, Move>, _> = Book::open(NAME);
+        let res1: Result<Book<Move, true>, _> = Book::open(NAME);
         assert!(res1.is_err());
         assert!(!std::path::Path::new(NAME).exists());
 
-        let new_book: Book<u16, Move> = Book::create(NAME).unwrap();
-        let res2: Result<Book<u16, Move>, _> = Book::create(NAME);
+        let new_book: Book<Move, true> = Book::create(NAME).unwrap();
+        let res2: Result<Book<Move, true>, _> = Book::create(NAME);
         assert!(res2.is_err());
 
         drop(new_book);
@@ -466,7 +371,7 @@ mod tests {
     fn test_insert() {
         const NAME: &str = "test_insert";
         let _ = std::fs::remove_dir_all(NAME);
-        let book: Book<u16, Move> = Book::create(NAME).unwrap();
+        let book: Book<Move, true> = Book::create(NAME).unwrap();
         let mut cube = Cube::default();
         cube = cube.make_move(Move(Axis::X, 0, 1));
         book.insert_cube(&cube, 1).unwrap();
@@ -488,7 +393,7 @@ mod tests {
     fn test_insert_word() {
         const NAME: &str = "test_insert_word";
         let _ = std::fs::remove_dir_all(NAME);
-        let book: Book<u16, Turn> = Book::create(NAME).unwrap();
+        let book: Book<Turn, true> = Book::create(NAME).unwrap();
         let word = Word::from([Turn::R, Turn::R, Turn::R, Turn::U]);
 
         book.update_word(&word).unwrap();

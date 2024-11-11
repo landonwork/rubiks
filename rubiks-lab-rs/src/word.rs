@@ -1,7 +1,6 @@
 use std::{fmt::Display, marker::PhantomData};
 use crate::prelude::*;
 
-// 
 #[derive(Clone, Debug)]
 pub struct Word<T> {
     pub actions: Vec<Move>,
@@ -17,7 +16,7 @@ impl<T: Action> Display for Word<T> {
             if i == 0 {
                 write!(f, "{}", a)?;
             } else {
-                write!(f, " {}", a)?;
+                write!(f, "{}", a)?;
             }
         }
         write!(f, ")")
@@ -123,7 +122,6 @@ impl<A: Action> Extend<A> for Word<A> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{Axis, Move};
 
     #[test]
     fn test_word_stuff() {

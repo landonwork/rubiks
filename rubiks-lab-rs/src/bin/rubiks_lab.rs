@@ -262,7 +262,6 @@ fn ui(frame: &mut Frame, app: &App) {
         inner_layout[0]
     );
 
-    // Cubix instructions
     frame.render_widget(
         Paragraph::new(include_str!("instructions.txt"))
             .block(Block::default().title("Instructions").borders(Borders::ALL)),

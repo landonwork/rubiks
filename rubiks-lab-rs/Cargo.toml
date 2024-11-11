@@ -1,6 +1,6 @@
 [package]
 name = "rubiks_lab_rs"
-version = "0.2.0-beta"
+version = "0.3.0-beta"
 edition = "2021"
 
 [lib]
@@ -8,8 +8,12 @@ crate-type = ["lib"]
 path = "src/lib.rs"
 
 [[bin]]
-name = "cubix"
-path = "src/bin/cubix.rs"
+name = "rubiks-lab"
+path = "src/bin/rubiks_lab.rs"
+
+[[bin]]
+name = "rubooks"
+path = "src/bin/rubooks.rs"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
